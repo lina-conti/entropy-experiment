@@ -1,9 +1,9 @@
 from utils import *
 
 with Halo(text="Loading dataframe", spinner="dots") as spinner:
-    df = pd.read_pickle('/home/lina/Desktop/Stage/Experience_entropie/results/entropies_newstest2014.pickle')
+    df = pd.read_pickle('/home/lina/Desktop/Stage/Experience_entropie/results/dataframes/entropies_newstest2014.pickle')
 with Halo(text="Loading dataframe", spinner="dots") as spinner:
-    df_forced = pd.read_pickle('/home/lina/Desktop/Stage/Experience_entropie/results/entropies_newstest2014_forced.pickle')
+    df_forced = pd.read_pickle('/home/lina/Desktop/Stage/Experience_entropie/results/dataframes/entropies_newstest2014_forced.pickle')
 
 
 # entropies moyennes
@@ -20,6 +20,11 @@ df = pd.concat([df, df_forced])
 df['token_position'] = df['token_position'].astype(int)
 df['sentence_length'] = df['sentence_length'].astype(int)
 
+"""
+print(df[df['token_position'] > 40].count())
+print(df.count())
+print((df[df['token_position'] > 40].count() / df.count()) * 100)
+"""
 # distribution des entropies
 df["entropy"].plot(kind="hist", title="Decision entropy when translating newstest2014 corpus", bins=50, color='purple')
 plt.xlabel("Entropy")
