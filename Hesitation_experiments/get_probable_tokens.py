@@ -3,11 +3,15 @@ Creates and saves a matrix of size number of tokens x n
 with the id of the n most probable tokens for each decision
 And another matrix of same shape with the log probability for each of them
 '''
-N = 3
+N = 1000
 
 import sys
 sys.path.insert(0, '/home/lina/Desktop/Stage/Experiences/code')
 from utils import *
+import json
+
+datetime_obj = datetime.datetime.now()
+print(datetime_obj.time())
 
 model = load_model("/home/lina/Desktop/Stage/transformer_wmt15_fr2en/transformer_wmt15_fr2en.yaml")
 max_output_length = load_config("/home/lina/Desktop/Stage/transformer_wmt15_fr2en/transformer_wmt15_fr2en.yaml")["training"]["max_output_length"]
@@ -51,9 +55,8 @@ for s, sentence in enumerate(f):
         max_value, pred_trg_token = torch.max(logits, dim=1)
         pred_trg_token = pred_trg_token.data.unsqueeze(-1)
         ys = torch.cat([ys, IntTensor([[pred_trg_token]])], dim=1)
-        print(to_tokens(pred_trg_token, model))
+        #print(to_tokens(pred_trg_token, model))
 
-        """
         n_best_tokens = []
         n_best_probabilities = []
         for j in range(N):
@@ -62,16 +65,16 @@ for s, sentence in enumerate(f):
             log_probas[0][log_probas.argmax()] = float('-inf')
         res_tokens.append(n_best_tokens)
         res_lprob.append(n_best_probabilities)
-        """
+
         if(pred_trg_token == eos_index):
             break
-    x = input()
-    if x == 'stop':
-        break
-
-print(res_tokens)
-print(res_lprob)
 
 f.close()
 
-#res_df.to_pickle('/home/lina/Desktop/Stage/Experience_entropie/results/entropies_X-a-fini.pickle')
+with open("/home/lina/Desktop/Stage/Experiences/results/Hesitation_experiments/nbest_tokens.newstest2014.json", 'w') as outfile:
+    json.dump(res_tokens, outfile)
+
+with open("/home/lina/Desktop/Stage/Experiences/results/Hesitation_experiments/nbest_lprobs.newstest2014.json", 'w') as outfile:
+    json.dump(res_lprob, outfile)
+
+print(datetime_obj.time())
