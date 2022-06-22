@@ -1,12 +1,32 @@
+"""
+The goal is to create a dataframe that has as many rows as tokens
+in the reference corpus in the target language.
+The i-th row describes the prediction of the i-th token with forced decoding,
+it contains:
+- the position of the token in the sentence
+- the total number of tokens in the sentence
+- the entropy of the probability distribution
+The dataframe should be saved for future use (with json)
+"""
+
+import sys
+sys.path.insert(0, '/home/lina/Desktop/Stage/Experiences/code')
 from utils import *
+
+datetime_obj = datetime.datetime.now()
+print(datetime_obj.time())
+
+parser = argparse.ArgumentParser()
+parser.add_argument("corpus", help="name of the corpus to use")
+args = parser.parse_args()
 
 model = load_model("/home/lina/Desktop/Stage/transformer_wmt15_fr2en/transformer_wmt15_fr2en.yaml")
 max_output_length = load_config("/home/lina/Desktop/Stage/transformer_wmt15_fr2en/transformer_wmt15_fr2en.yaml")["training"]["max_output_length"]
 bos_index = model.bos_index
 eos_index = model.eos_index
 
-file_fr = open("/home/lina/Desktop/Stage/Modified_data/X-a-fini.gold.bpe.fra")
-file_en = open("/home/lina/Desktop/Stage/Modified_data/X-a-fini.gold.bpe.eng")
+file_fr = open(f"/home/lina/Desktop/Stage/Modified_data/{args.corpus}.gold.bpe.fra")
+file_en = open(f"/home/lina/Desktop/Stage/Modified_data/{args.corpus}.gold.bpe.eng")
 
 #res_df = pd.DataFrame(columns=("token_position", "sentence_length", "log_probas", "entropy"))
 res_df = pd.DataFrame(columns=("token_position", "sentence_length", "entropy"))
@@ -59,4 +79,7 @@ for sentence_fr, sentence_en in zip(file_fr, file_en):
 file_fr.close()
 file_en.close()
 
-res_df.to_pickle('/home/lina/Desktop/Stage/Experience_entropie/results/entropies_X-a-fini_forced.pickle')
+res_df.to_json(f'/home/lina/Desktop/Stage/Experiences/results/Entropy_experiments/dataframes/entropies_{args.corpus}_forced.json')
+
+datetime_obj = datetime.datetime.now()
+print(datetime_obj.time())

@@ -1,3 +1,7 @@
+"""
+old version that doesn't analyse forced and normal decoding side by side
+"""
+
 from utils import *
 
 with Halo(text="Loading dataframe", spinner="dots") as spinner:

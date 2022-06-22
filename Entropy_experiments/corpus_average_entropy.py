@@ -1,25 +1,30 @@
 """
-The goal is to create a dataframe with that has as many rows as tokens
-in the reference corpus. The i-th row describes the prediction of the i-th token,
+The goal is to create a dataframe that has as many rows as predicted tokens.
+The i-th row describes the prediction of the i-th token with greedy decoding,
 it contains:
 - the position of the token in the sentence
 - the total number of tokens in the sentence
-- the log probability distribution (a list the i-th entry of which
-  correspond to the probability of generating the i-th token of
-  the vocabulary)
 - the entropy of the probability distribution
-The dataframe should be saved for future use (with pickle?)
+The dataframe should be saved for future use (with json)
 """
 
+import sys
+sys.path.insert(0, '/home/lina/Desktop/Stage/Experiences/code')
 from utils import *
 
+datetime_obj = datetime.datetime.now()
+print(datetime_obj.time())
+
+parser = argparse.ArgumentParser()
+parser.add_argument("corpus", help="name of the corpus to use")
+args = parser.parse_args()
 
 model = load_model("/home/lina/Desktop/Stage/transformer_wmt15_fr2en/transformer_wmt15_fr2en.yaml")
 max_output_length = load_config("/home/lina/Desktop/Stage/transformer_wmt15_fr2en/transformer_wmt15_fr2en.yaml")["training"]["max_output_length"]
 bos_index = model.bos_index
 eos_index = model.eos_index
 
-f = open("/home/lina/Desktop/Stage/Modified_data/X-a-fini.gold.bpe.fra")
+f = open(f"/home/lina/Desktop/Stage/Modified_data/{args.corpus}.gold.bpe.fra")
 
 # not saving probability distributions because they take up too much space
 #res_df = pd.DataFrame(columns=("token_position", "sentence_length", "log_probas", "entropy"))
@@ -75,4 +80,7 @@ for s, sentence in enumerate(f):
 
 f.close()
 
-res_df.to_pickle('/home/lina/Desktop/Stage/Experience_entropie/results/entropies_X-a-fini.pickle')
+res_df.to_json(f'/home/lina/Desktop/Stage/Experiences/results/Entropy_experiments/dataframes/entropies_{args.corpus}.json')
+
+datetime_obj = datetime.datetime.now()
+print(datetime_obj.time())
