@@ -18,7 +18,7 @@ max_output_length = load_config("/home/lina/Desktop/Stage/transformer_wmt15_fr2e
 bos_index = model.bos_index
 eos_index = model.eos_index
 
-f = open("/home/lina/Desktop/Stage/Modified_data/newstest2014.clean.bpe.fra")
+f = open("/home/lina/Desktop/Stage/Modified_data/X-a-fini.gold.bpe.fra")
 
 # array of size number of tokens x n
 res_tokens = []
@@ -71,10 +71,11 @@ for s, sentence in enumerate(f):
 
 f.close()
 
-with open("/home/lina/Desktop/Stage/Experiences/results/Hesitation_experiments/nbest_tokens.newstest2014.json", 'w') as outfile:
+with open("/home/lina/Desktop/Stage/Experiences/results/Hesitation_experiments/nbest_tokens.X-a-fini.json", 'w') as outfile:
     json.dump(res_tokens, outfile)
 
-with open("/home/lina/Desktop/Stage/Experiences/results/Hesitation_experiments/nbest_lprobs.newstest2014.json", 'w') as outfile:
+with open("/home/lina/Desktop/Stage/Experiences/results/Hesitation_experiments/nbest_lprobs.X-a-fini.json", 'w') as outfile:
     json.dump(res_lprob, outfile)
 
+datetime_obj = datetime.datetime.now()
 print(datetime_obj.time())
