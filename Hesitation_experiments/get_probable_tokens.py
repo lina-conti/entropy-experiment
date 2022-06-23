@@ -2,13 +2,14 @@
 Creates and saves a matrix of size number of tokens x n
 with the id of the n most probable tokens for each decision
 And another matrix of same shape with the log probability for each of them
+(I'm not doing the second one for now because it's big and it takes a long time)
 '''
 N = 1000
+CORPUS = 'newstest2014'
 
 import sys
 sys.path.insert(0, '/home/lina/Desktop/Stage/Experiences/code')
 from utils import *
-import json
 
 datetime_obj = datetime.datetime.now()
 print(datetime_obj.time())
@@ -18,11 +19,11 @@ max_output_length = load_config("/home/lina/Desktop/Stage/transformer_wmt15_fr2e
 bos_index = model.bos_index
 eos_index = model.eos_index
 
-f = open("/home/lina/Desktop/Stage/Modified_data/X-a-fini.gold.bpe.fra")
+f = open(f"/home/lina/Desktop/Stage/Modified_data/{CORPUS}.gold.bpe.fra")
 
-# array of size number of tokens x n
+# array of size number of tokens x N
 res_tokens = []
-res_lprob = []
+# res_lprob = []
 for s, sentence in enumerate(f):
 
     print("translating sentence ", s)
@@ -58,24 +59,25 @@ for s, sentence in enumerate(f):
         #print(to_tokens(pred_trg_token, model))
 
         n_best_tokens = []
-        n_best_probabilities = []
+        #n_best_probabilities = []
         for j in range(N):
             n_best_tokens.append(int(log_probas.argmax()))
-            n_best_probabilities.append(float(log_probas.max()))
+            #n_best_probabilities.append(float(log_probas.max()))
             log_probas[0][log_probas.argmax()] = float('-inf')
         res_tokens.append(n_best_tokens)
-        res_lprob.append(n_best_probabilities)
+        #res_lprob.append(n_best_probabilities)
 
         if(pred_trg_token == eos_index):
             break
 
 f.close()
 
-with open("/home/lina/Desktop/Stage/Experiences/results/Hesitation_experiments/nbest_tokens.X-a-fini.json", 'w') as outfile:
+with open(f"/home/lina/Desktop/Stage/Experiences/results/Hesitation_experiments/nbest_tokens.{CORPUS}.json", 'w') as outfile:
     json.dump(res_tokens, outfile)
 
+"""
 with open("/home/lina/Desktop/Stage/Experiences/results/Hesitation_experiments/nbest_lprobs.X-a-fini.json", 'w') as outfile:
     json.dump(res_lprob, outfile)
-
+"""
 datetime_obj = datetime.datetime.now()
 print(datetime_obj.time())

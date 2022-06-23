@@ -3,8 +3,8 @@ Finds the N ids with the highest probability, converts them to tokens and comput
 - the proportion of tokens starting with _ (beginning of word tokens)
 - the proportion of tokens starting with _ and preceded by a token starting in _
 '''
-N = 3
-CORPUS = 'newstest2014'
+N = 1000
+CORPUS = 'X-a-fini'
 
 import sys
 sys.path.insert(0, '/home/lina/Desktop/Stage/Experiences/code')
