@@ -3,9 +3,6 @@ Compares the N best hypothesis predicted by the system:
 - hypothesis are detokenized, aligned and written to a file
 - hypothesis can also be annotated for POS (optional)
 """
-N = 5
-CORPUS = "X-a-fini.small.pred"
-POS_TAGS = True
 
 import sys
 sys.path.insert(0, '/home/lina/Desktop/Stage/Experiences/code')
@@ -13,23 +10,68 @@ from utils import *
 from lingpy.align.multiple import mult_align
 import sentencepiece as spm
 import stanza
+import difflib
 
-nlp = stanza.Pipeline(lang='en', processors='tokenize,mwt,pos')
-tokenizer = spm.SentencePieceProcessor(model_file='/home/lina/Desktop/Stage/tokenizers/en_tokenization.model')
-
-hypothesis = []
-with open(f"/home/lina/Desktop/Stage/Experiences/results/Hesitation_experiments/{CORPUS}.eng", 'r') as infile:
-    with open(f"/home/lina/Desktop/Stage/Experiences/results/Hesitation_experiments/{CORPUS}.aligned.eng", 'w') as outfile:
-        for i, line in enumerate(infile):
-            hypothesis.append(tokenizer.decode(line.split()))
-            if (i+1)%N == 0:
-                aligned_hyp = mult_align(hypothesis)
-                for j in range(len(hypothesis)):
-                    outfile.write("\t".join(token.ljust(10) for token in aligned_hyp[j]))
-                    outfile.write("\n")
-                    if POS_TAGS:
-                        doc = nlp(hypothesis[j])
-                        outfile.write("\t".join(word.upos.ljust(10) for sent in doc.sentences for word in sent.words))
+def align_hypothesis(input_path, output_path, n, POS_tags=False):
+    '''
+    detokenizes, aligns and writes hypothesis to a file,
+    hypothesis can also be annotated for POS (optional)
+    '''
+    nlp = stanza.Pipeline(lang='en', processors='tokenize,mwt,pos')
+    tokenizer = spm.SentencePieceProcessor(model_file='/home/lina/Desktop/Stage/tokenizers/en_tokenization.model')
+    hypothesis = []
+    with open(input_path, 'r') as infile:
+        with open(output_path, 'w') as outfile:
+            for i, line in enumerate(infile):
+                hypothesis.append(tokenizer.decode(line.split()))
+                if (i+1)%n == 0:
+                    aligned_hyp = mult_align(hypothesis)
+                    for j in range(len(hypothesis)):
+                        outfile.write("\t".join(token.ljust(10) for token in aligned_hyp[j]))
                         outfile.write("\n")
-                hypothesis = []
-                outfile.write("\n")
+                        if POS_TAGS:
+                            doc = nlp(hypothesis[j])
+                            outfile.write("\t".join(word.upos.ljust(10) for sent in doc.sentences for word in sent.words))
+                            outfile.write("\n")
+                    hypothesis = []
+                    outfile.write("\n")
+
+
+def compare_hypothesis(input_path, output_path, n):
+    '''
+    compares each of the n-best hypothesis in the input_path file with the
+    1-best hypothesis using difflib, results are written to the output_path file
+    '''
+    diff = difflib.Differ()
+    tokenizer = spm.SentencePieceProcessor(model_file='/home/lina/Desktop/Stage/tokenizers/en_tokenization.model')
+    hypothesis = []
+    with open(input_path, 'r') as infile:
+        with open(output_path, 'w') as outfile:
+            for i, line in enumerate(infile):
+                hypothesis.append(tokenizer.decode(line.split()))
+                if (i+1)%n == 0:
+                    for j in range(1, len(hypothesis)):
+                        res = list(diff.compare(hypothesis[0].split(), hypothesis[j].split()))
+                        outfile.write("\t".join(word.ljust(10) for word in res))
+                        outfile.write("\n")
+                    hypothesis = []
+                    outfile.write("\n")
+
+def get_modifications():
+    '''
+    takes as input a 
+    '''
+
+
+if __name__ == "__main__":
+
+    N = 5
+    CORPUS = "X-a-fini.small.pred"
+    POS_TAGS = True
+
+    """align_hypothesis(f"/home/lina/Desktop/Stage/Experiences/results/Hesitation_experiments/{CORPUS}.eng",\
+     f"/home/lina/Desktop/Stage/Experiences/results/Hesitation_experiments/{CORPUS}.aligned.eng",\
+     N, POS_tags=POS_TAGS)"""
+
+    compare_hypothesis(f"/home/lina/Desktop/Stage/Experiences/results/Hesitation_experiments/{CORPUS}.eng",\
+     f"/home/lina/Desktop/Stage/Experiences/results/Hesitation_experiments/{CORPUS}.comp.eng", N)
