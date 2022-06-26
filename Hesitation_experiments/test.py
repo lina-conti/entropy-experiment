@@ -1,50 +1,67 @@
 import sys
 sys.path.insert(0, '/home/lina/Desktop/Stage/Experiences/code')
 from utils import *
+from lingpy.align.multiple import mult_align
+import sentencepiece as spm
+import stanza
+import difflib
+from pprint import pprint
 
-model = load_model("/home/lina/Desktop/Stage/transformer_wmt15_fr2en/transformer_wmt15_fr2en.yaml")
+N = 5
+CORPUS = "newstest2014.small"
+POS_TAGS = False
 
-s = "▁spec ta cul aire ▁sau t ▁en ▁\" wing suit \" ▁au - des s us ▁de ▁bog ota"
-target = "▁spec ta cul aire ▁sau t ▁en ▁\" wing suit \" ▁au - des s us ▁de ▁bog ota".split()
+def get_modifications(delta_list):
+    '''
+    takes as input a list obtained with Differ.compare and returns a dictionary
+    with deleted words, inserted words and substituted words
+    '''
+    res = {'Substitutions': [], 'Insertions': [], 'Deletions': []}
+    i = 0
+    while i < len(delta_list):
+        deletions = ''
+        insertions = ''
+        while i<len(delta_list) and delta_list[i].startswith('+'):
+            insertions += delta_list[i][1:]
+            i += 1
+        if insertions:
+            res['Insertions'].append(insertions)
+            continue
+        while i<len(delta_list) and delta_list[i].startswith('-'):
+            deletions += delta_list[i][1:]
+            i += 1
+        if deletions:
+            while i<len(delta_list) and delta_list[i].startswith('+'):
+                insertions += delta_list[i][1:]
+                i += 1
+            if insertions:
+                res['Substitutions'].append((deletions,insertions))
+            else:
+                res['Deletions'].append(deletions)
+        i += 1
+    return res
 
-encoder_output = encode_sentence(s.split(), model)
+nlp = stanza.Pipeline(lang='en', processors='tokenize,mwt,pos')
+tokenizer = spm.SentencePieceProcessor(model_file='/home/lina/Desktop/Stage/tokenizers/en_tokenization.model')
+diff = difflib.Differ()
 
-src_mask = torch.tensor([[[True for _ in range(encoder_output.shape[1])]]])
-
-target = [model.trg_vocab.stoi[token] for token in target + [EOS_TOKEN]]
-
-bos_index = model.bos_index
-eos_index = model.eos_index
-
-ys = encoder_output.new_full([1, 1], bos_index, dtype=torch.long)
-trg_mask = src_mask.new_ones([1, 1, 1])
-
-res = []
-for gold_trg_token in target:
-    model.eval()
-    with torch.no_grad():
-        logits, _, _, _ = model(
-            return_type="decode",
-            trg_input=ys,
-            encoder_output=encoder_output,
-            encoder_hidden=None,
-            src_mask=src_mask,
-            unroll_steps=None,
-            decoder_hidden=None,
-            trg_mask=trg_mask
-        )
-
-        logits = logits[:, -1]
-        log_probas = log_softmax(logits)
-
-        max_value, pred_trg_token = torch.max(logits, dim=1)
-        print(to_tokens(pred_trg_token, model))
-        pred_trg_token = pred_trg_token.data.unsqueeze(-1)
-        res.append({"predicted_token_idx": pred_trg_token.item(),
-                    "predicted_log_proba": log_probas[0][pred_trg_token].item(),
-                    "gold_token_idx": gold_trg_token,
-                    "gold_log_proba": log_probas[0][gold_trg_token].item(),
-                    "log_probas": log_probas[0].detach().cpu().numpy()
-                    })
-
-        ys = torch.cat([ys, IntTensor([[gold_trg_token]])], dim=1)
+hypothesis = []
+with open(f"/home/lina/Desktop/Stage/Experiences/results/Hesitation_experiments/{CORPUS}.eng", 'r') as infile:
+    for i, line in enumerate(infile):
+        hypothesis.append(tokenizer.decode(line.split()))
+        if (i+1)%N == 0:
+            aligned_hyp = mult_align(hypothesis)
+            """for hyp in aligned_hyp:
+                print("\t".join(w for w in hyp))"""
+            for j in range(1, len(hypothesis)):
+                print("\t".join(w for w in aligned_hyp[0]))
+                print("\t".join(w for w in aligned_hyp[j]))
+                #print("\t".join(w for w in list(diff.compare(hypothesis[0].split(), hypothesis[j].split()))))
+                s = difflib.SequenceMatcher(None, hypothesis[0].split(), hypothesis[j].split())
+                for tag, i1, i2, j1, j2 in s.get_opcodes():
+                    if tag != 'equal':
+                        print('{:7}  {!r:>8} --> {!r}'.format(tag, hypothesis[0].split()[i1:i2], hypothesis[j].split()[j1:j2]))
+                #print(get_modifications(list(diff.compare(hypothesis[0].split(), hypothesis[j].split()))))
+                print()
+            print()
+            hypothesis = []
