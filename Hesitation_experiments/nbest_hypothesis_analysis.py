@@ -1,7 +1,7 @@
 """
-Compares the N best hypothesis predicted by the system:
-- hypothesis are detokenized, aligned and written to a file
-- hypothesis can also be annotated for POS (optional)
+Compares the N best hypothesis predicted by the system for each sentence in the corpus:
+deletions, insertions and substition necessary to go from one to the other
+are written to a DataFrame
 """
 
 import sys
@@ -12,74 +12,94 @@ import sentencepiece as spm
 import stanza
 import difflib
 
-def align_hypothesis(input_path, output_path, n, POS_tags=False):
+
+def get_modifications(sentenceA, sentenceB):
     '''
-    detokenizes, aligns and writes hypothesis to a file,
-    hypothesis can also be annotated for POS (optional)
+    takes as input two lists of words and returns a dictionary
+    with deletions, insertions and substition necessary for going from
+    the first to the second
     '''
-    nlp = stanza.Pipeline(lang='en', processors='tokenize,mwt,pos')
+    res = {}
+    matcher = difflib.SequenceMatcher(None, sentenceA, sentenceB)
+    for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+        if tag != 'equal':
+            res[tag] = sentenceA[i1:i2], sentenceB[j1:j2]
+    return res
+
+
+def compare_all_hypotheses(input_path, n):
+    """
+    takes as input a file with a corpus of n-best translations
+    outputs a dataframe with the modifications necessary to go from one
+    hypothesis to the other (all the n-best hypotheses are compared two-by-two)
+    """
+    df = pd.DataFrame(columns=("sentence", "hypotheses", "replace", "insert", "delete"))
     tokenizer = spm.SentencePieceProcessor(model_file='/home/lina/Desktop/Stage/tokenizers/en_tokenization.model')
+
     hypothesis = []
+    s = 0
     with open(input_path, 'r') as infile:
-        with open(output_path, 'w') as outfile:
-            for i, line in enumerate(infile):
-                hypothesis.append(tokenizer.decode(line.split()))
-                if (i+1)%n == 0:
-                    aligned_hyp = mult_align(hypothesis)
-                    for j in range(len(hypothesis)):
-                        outfile.write(" \t".join(word.ljust(10) for word in aligned_hyp[j]))
-                        outfile.write("\n")
-                        if POS_TAGS:
-                            doc = nlp(hypothesis[j])
-                            outfile.write(" \t".join(word.upos.ljust(10) for sent in doc.sentences for word in sent.words))
-                            outfile.write("\n")
-                    hypothesis = []
-                    outfile.write("\n")
+        for l, line in enumerate(infile):
+            hypothesis.append(tokenizer.decode(line.split()))
+            if (l+1)%n == 0:
+                s += 1
+                for i in range(n-1):
+                    for j in range(i, n):
+                        if i == j:
+                            continue
+                        modifications = get_modifications(hypothesis[i].split(), hypothesis[j].split())
+                        new_row = pd.DataFrame({"sentence": s,
+                                    "hypotheses": [tuple([i+1,j+1])],
+                                    "replace": [modifications['replace'] if 'replace' in modifications else None],
+                                    "insert": [modifications['insert'][1] if 'insert' in modifications else None],
+                                    "delete": [modifications['delete'][0] if 'delete' in modifications else None]
+                                    })
+                        df = pd.concat([df, new_row], ignore_index=True)
+                hypothesis = []
+    return df
 
 
-def compare_hypothesis(input_path, output_path, n):
-    '''
-    compares each of the n-best hypothesis in the input_path file with the
-    1-best hypothesis using difflib, results are written to the output_path file
-    '''
-    diff = difflib.Differ()
+def compare_best_hypothesis(input_path, n):
+    """
+    takes as input a file with a corpus of n-best translations
+    outputs a dataframe with the modifications necessary to go from one
+    hypothesis to the other (only the 1-best hypothesis is compared with all others)
+    """
+    df = pd.DataFrame(columns=("sentence", "hypotheses", "replace", "insert", "delete"))
     tokenizer = spm.SentencePieceProcessor(model_file='/home/lina/Desktop/Stage/tokenizers/en_tokenization.model')
-    hypothesis = []
-    with open(input_path, 'r') as infile:
-        with open(output_path, 'w') as outfile:
-            for i, line in enumerate(infile):
-                hypothesis.append(line)
-                if line.strip() == "":
-                    for j in range(1, len(hypothesis)-1):
-                        res = list(diff.compare(hypothesis[0].split(), hypothesis[j].split()))
-                        outfile.write(" ".join(word for word in res))
-                        outfile.write("\n")
-                    hypothesis = []
-                    outfile.write("\n")
 
-def get_modifications(delta_list):
-    '''
-    takes as input a list obtained with Differ.compare and returns a dictionary
-    with deleted words, inserted words and substituted words
-    '''
-    res = {'Substitutions': [], 'Insertions': [], 'Deletions': []}
-    for i in range(len(delta_list)):
-        if delta_list[i].startswith('+'):
-            res['Substitutions'].append(delta_list[i][2:])
-        elif delta_list[i].startswith('-'):
-            if True:
-                pass
+    hypothesis = []
+    s = 0
+    with open(input_path, 'r') as infile:
+        for l, line in enumerate(infile):
+            hypothesis.append(tokenizer.decode(line.split()))
+            if (l+1)%n == 0:
+                s += 1
+                for j in range(1, n):
+                    modifications = get_modifications(hypothesis[0].split(), hypothesis[j].split())
+                    new_row = pd.DataFrame({"sentence": s,
+                                "hypotheses": [tuple([1,j+1])],
+                                "replace": [modifications['replace'] if 'replace' in modifications else None],
+                                "insert": [modifications['insert'][1] if 'insert' in modifications else None],
+                                "delete": [modifications['delete'][0] if 'delete' in modifications else None]
+                                })
+                    df = pd.concat([df, new_row], ignore_index=True)
+                hypothesis = []
+    return df
 
 
 if __name__ == "__main__":
 
     N = 5
-    CORPUS = "X-a-fini.small.pred"
-    POS_TAGS = False
+    CORPUS = "newstest2014.pred"
+    #POS_TAGS = False
+    COMPARE_ALL = True
 
-    align_hypothesis(f"/home/lina/Desktop/Stage/Experiences/results/Hesitation_experiments/{CORPUS}.eng",\
-     f"/home/lina/Desktop/Stage/Experiences/results/Hesitation_experiments/{CORPUS}.aligned.eng",\
-     N, POS_tags=POS_TAGS)
+    file = f"/home/lina/Desktop/Stage/Modified_data/{CORPUS}.eng"
+    if COMPARE_ALL:
+        df = compare_all_hypotheses(file, N)
+    else:
+        df = compare_best_hypothesis(file, N)
 
-    compare_hypothesis(f"/home/lina/Desktop/Stage/Experiences/results/Hesitation_experiments/{CORPUS}.aligned.eng",\
-     f"/home/lina/Desktop/Stage/Experiences/results/Hesitation_experiments/{CORPUS}.comp.eng", N)
+    print(df)
+    df.to_json(f'/home/lina/Desktop/Stage/Experiences/results/Hesitation_experiments/{CORPUS}.df.json')

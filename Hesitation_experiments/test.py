@@ -8,37 +8,20 @@ import difflib
 from pprint import pprint
 
 N = 5
-CORPUS = "newstest2014.small"
+CORPUS = "newstest2014.pred"
 POS_TAGS = False
 
-def get_modifications(delta_list):
+def get_modifications(sentenceA, sentenceB):
     '''
-    takes as input a list obtained with Differ.compare and returns a dictionary
-    with deleted words, inserted words and substituted words
+    takes as input two lists of words and returns a dictionary
+    with deletions, insertions and substition necesaary for going from
+    the first to the second
     '''
-    res = {'Substitutions': [], 'Insertions': [], 'Deletions': []}
-    i = 0
-    while i < len(delta_list):
-        deletions = ''
-        insertions = ''
-        while i<len(delta_list) and delta_list[i].startswith('+'):
-            insertions += delta_list[i][1:]
-            i += 1
-        if insertions:
-            res['Insertions'].append(insertions)
-            continue
-        while i<len(delta_list) and delta_list[i].startswith('-'):
-            deletions += delta_list[i][1:]
-            i += 1
-        if deletions:
-            while i<len(delta_list) and delta_list[i].startswith('+'):
-                insertions += delta_list[i][1:]
-                i += 1
-            if insertions:
-                res['Substitutions'].append((deletions,insertions))
-            else:
-                res['Deletions'].append(deletions)
-        i += 1
+    res = {}
+    matcher = difflib.SequenceMatcher(None, sentenceA, sentenceB)
+    for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+        if tag != 'equal':
+            res[tag] = sentenceA[i1:i2], sentenceB[j1:j2]
     return res
 
 nlp = stanza.Pipeline(lang='en', processors='tokenize,mwt,pos')
@@ -46,22 +29,18 @@ tokenizer = spm.SentencePieceProcessor(model_file='/home/lina/Desktop/Stage/toke
 diff = difflib.Differ()
 
 hypothesis = []
-with open(f"/home/lina/Desktop/Stage/Experiences/results/Hesitation_experiments/{CORPUS}.eng", 'r') as infile:
+with open(f"/home/lina/Desktop/Stage/Modified_data/{CORPUS}.eng", 'r') as infile:
     for i, line in enumerate(infile):
         hypothesis.append(tokenizer.decode(line.split()))
         if (i+1)%N == 0:
-            aligned_hyp = mult_align(hypothesis)
+            #aligned_hyp = mult_align(hypothesis)
             """for hyp in aligned_hyp:
                 print("\t".join(w for w in hyp))"""
             for j in range(1, len(hypothesis)):
-                print("\t".join(w for w in aligned_hyp[0]))
-                print("\t".join(w for w in aligned_hyp[j]))
+                print(hypothesis[0])
+                print(hypothesis[j])
                 #print("\t".join(w for w in list(diff.compare(hypothesis[0].split(), hypothesis[j].split()))))
-                s = difflib.SequenceMatcher(None, hypothesis[0].split(), hypothesis[j].split())
-                for tag, i1, i2, j1, j2 in s.get_opcodes():
-                    if tag != 'equal':
-                        print('{:7}  {!r:>8} --> {!r}'.format(tag, hypothesis[0].split()[i1:i2], hypothesis[j].split()[j1:j2]))
-                #print(get_modifications(list(diff.compare(hypothesis[0].split(), hypothesis[j].split()))))
+                print(get_modifications(hypothesis[0].split(), hypothesis[j].split()))
                 print()
             print()
             hypothesis = []
