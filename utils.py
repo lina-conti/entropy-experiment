@@ -63,7 +63,7 @@ def load_model(cfg_file: str):
     return model
 
 
-def decoding(
+def greedy_decoding(
         model: Model,
         encoder_output: Tensor):
 
@@ -139,6 +139,129 @@ def decoding(
 
     return predicted_translation, pd.DataFrame(res)
 
+def ancestral_sampling(
+        model: Model,
+        encoder_output: Tensor,
+        max_output_length: int):
+
+    """
+    WORK IN PROGRESS
+
+    Parameters
+    ----------
+    - model: a JoeyNMT model
+    - encoder_output: the encoded sentence built by the encoder
+
+    Returns
+    -------
+    A list of ids of predicted tokens using ancestral sampling for decoding
+    """
+    predicted_translation = []
+
+    src_mask = torch.tensor([[[True for _ in range(encoder_output.shape[1])]]])
+
+    bos_index = model.bos_index
+    eos_index = model.eos_index
+
+    ys = encoder_output.new_full([1, 1], bos_index, dtype=torch.long)
+    trg_mask = src_mask.new_ones([1, 1, 1])
+
+    for i in range(max_output_length):
+        model.eval()
+        with torch.no_grad():
+            logits, _, _, _ = model(
+                return_type="decode",
+                trg_input=ys,
+                encoder_output=encoder_output,
+                encoder_hidden=None,
+                src_mask=src_mask,
+                unroll_steps=None,
+                decoder_hidden=None,
+                trg_mask=trg_mask
+            )
+
+            logits = logits[:, -1]
+            probas = softmax(logits)
+
+            rng = np.random.default_rng()
+            pred_trg_token = rng.choice(len(model.trg_vocab), p=probas[0].detach().cpu().numpy())
+
+            ys = torch.cat([ys, IntTensor([[pred_trg_token]])], dim=1)
+            # print(ys)
+            if(pred_trg_token == eos_index):
+                break
+
+            predicted_translation.append(pred_trg_token)
+
+    return predicted_translation
+
+def top_k_sampling(
+        model: Model,
+        encoder_output: Tensor,
+        max_output_length: int,
+        k: int):
+
+    """
+    WORK IN PROGRESS
+
+    Parameters
+    ----------
+    - model: a JoeyNMT model
+    - encoder_output: the encoded sentence built by the encoder
+
+    Returns
+    -------
+    A list of ids of predicted tokens using ancestral sampling for decoding
+    """
+    predicted_translation = []
+
+    src_mask = torch.tensor([[[True for _ in range(encoder_output.shape[1])]]])
+
+    bos_index = model.bos_index
+    eos_index = model.eos_index
+
+    ys = encoder_output.new_full([1, 1], bos_index, dtype=torch.long)
+    trg_mask = src_mask.new_ones([1, 1, 1])
+
+    for i in range(max_output_length):
+        model.eval()
+        with torch.no_grad():
+            logits, _, _, _ = model(
+                return_type="decode",
+                trg_input=ys,
+                encoder_output=encoder_output,
+                encoder_hidden=None,
+                src_mask=src_mask,
+                unroll_steps=None,
+                decoder_hidden=None,
+                trg_mask=trg_mask
+            )
+
+            probas = softmax(logits[:, -1])
+
+            new_dist_ids = np.array([])
+            new_dist_probs = np.array([])
+            z = 0
+            for _ in range(k):
+                max_prob, max_token = torch.max(probas, dim=1)
+                new_dist_ids = np.append(new_dist_ids, [max_token])
+                new_dist_probs = np.append(new_dist_probs, [max_prob])
+                probas[0][new_dist_ids] = float('-inf')
+                z += max_prob
+            new_dist_probs = new_dist_probs / z
+            print(new_dist_probs)
+
+            rng = np.random.default_rng()
+            pred_trg_token = rng.choice(new_dist_ids, p=new_dist_probs)
+
+            ys = torch.cat([ys, IntTensor([[pred_trg_token]])], dim=1)
+            # print(ys)
+            if(pred_trg_token == eos_index):
+                break
+
+            predicted_translation.append(pred_trg_token)
+
+    return predicted_translation
 
 def encode_sentence(sentence: List[str], model):
 
