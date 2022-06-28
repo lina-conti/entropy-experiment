@@ -22,6 +22,7 @@ import datetime
 from math import exp, log
 import numpy as np
 import seaborn as sns
+import sentencepiece as spm
 
 from scipy.stats import entropy
 
@@ -166,7 +167,7 @@ def ancestral_sampling(
     ys = encoder_output.new_full([1, 1], bos_index, dtype=torch.long)
     trg_mask = src_mask.new_ones([1, 1, 1])
 
-    for i in range(max_output_length):
+    for _ in range(max_output_length):
         model.eval()
         with torch.no_grad():
             logits, _, _, _ = model(
@@ -255,7 +256,7 @@ def top_k_sampling(
             pred_trg_token = rng.choice(new_dist_ids, p=new_dist_probs)
 
             ys = torch.cat([ys, IntTensor([[pred_trg_token]])], dim=1)
-            
+
             if(pred_trg_token == eos_index):
                 break
 
@@ -285,6 +286,11 @@ def to_tokens(predicted_ids, model):
     for id in predicted_ids:
         sentence += model.trg_vocab.itos[id] + " "
     return sentence
+
+def to_sentence(predicted_ids, model):
+    tokens = [model.trg_vocab.itos[id] for id in predicted_ids]
+    tokenizer = spm.SentencePieceProcessor(model_file='/home/lina/Desktop/Stage/tokenizers/en_tokenization.model')
+    return tokenizer.decode(tokens)
 
 def difference_highest_second(prob_distribution: np.ndarray):
     parted_list = np.partition(prob_distribution, -2)

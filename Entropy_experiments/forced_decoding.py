@@ -161,7 +161,7 @@ def encode_sentence(sentence: List[str], model):
 
 
 if __name__ == "__main__":
-    model = load_model("transformer_wmt15_fr2en/transformer_wmt15_fr2en.yaml")
+    model = load_model("/home/lina/Desktop/Stage/transformer_wmt15_fr2en/transformer_wmt15_fr2en.yaml")
 
     s = "▁l ' athlète ▁a ▁terminé ▁son ▁travail ▁."
     t = "▁the ▁athlete ▁finished ▁his ▁work ▁."
