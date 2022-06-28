@@ -69,10 +69,9 @@ def load_model(cfg_file: str):
     return model
 
 
-def forced_decoding(
+def greedy_decoding(
         model: Model,
-        encoder_output: Tensor,
-        target: List[str]):
+        encoder_output: Tensor):
     """
     Parameters
     ----------
@@ -165,6 +164,6 @@ if __name__ == "__main__":
 
     src = encode_sentence(s.split(), model)
 
-    df = forced_decoding(model, src, t.split())
+    df = greedy_decoding(model, src)
 
     print(model.trg_vocab.array_to_sentence(df['predicted_token_idx'].to_numpy()))

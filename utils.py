@@ -208,10 +208,11 @@ def top_k_sampling(
     ----------
     - model: a JoeyNMT model
     - encoder_output: the encoded sentence built by the encoder
+    - k: int, size of the probability distribution to draw from
 
     Returns
     -------
-    A list of ids of predicted tokens using ancestral sampling for decoding
+    A list of ids of predicted tokens using top-k sampling for decoding
     """
     predicted_translation = []
 
@@ -239,23 +240,22 @@ def top_k_sampling(
 
             probas = softmax(logits[:, -1])
 
-            new_dist_ids = np.array([])
-            new_dist_probs = np.array([])
+            new_dist_ids = np.empty(k, dtype=int)
+            new_dist_probs = np.empty(k)
             z = 0
-            for _ in range(k):
+            for j in range(k):
                 max_prob, max_token = torch.max(probas, dim=1)
-                new_dist_ids = np.append(new_dist_ids, [max_token])
-                new_dist_probs = np.append(new_dist_probs, [max_prob])
-                probas[0][new_dist_ids] = float('-inf')
-                z += max_prob
+                new_dist_ids[j] = int(max_token)
+                new_dist_probs[j] = float(max_prob)
+                probas[0][max_token] = float('-inf')
+                z += float(max_prob)
             new_dist_probs = new_dist_probs / z
-            print(new_dist_probs)
 
             rng = np.random.default_rng()
             pred_trg_token = rng.choice(new_dist_ids, p=new_dist_probs)
 
             ys = torch.cat([ys, IntTensor([[pred_trg_token]])], dim=1)
-            # print(ys)
+            
             if(pred_trg_token == eos_index):
                 break
 
