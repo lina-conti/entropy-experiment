@@ -88,7 +88,6 @@ def greedy_decoding(
 
     bos_index = model.bos_index
     eos_index = model.eos_index
-    print(bos_index)
 
     ys = encoder_output.new_full([1, 1], bos_index, dtype=torch.long)
     trg_mask = src_mask.new_ones([1, 1, 1])
@@ -150,7 +149,7 @@ if __name__ == "__main__":
 
     #s = "▁l ' athlète ▁a ▁terminé ▁son ▁travail ▁."
     #t = "▁the ▁athlete ▁finished ▁his ▁work ▁."
-    s = "le chien a terminé son travail."
+    s = "l'athlète a terminé son travail."
     s_tokenized = tokenizer[cfg["data"]["src"]["lang"]](s)
 
     src = encode_sentence(s_tokenized, model)

@@ -9,7 +9,7 @@ sys.path.insert(0, '/home/lina/Desktop/Stage/Experiences/code')
 from utils import *
 
 with Halo(text="Loading dataframe", spinner="dots") as spinner:
-    df = pd.read_json(f"/home/lina/Desktop/Stage/Experiences/results/Hesitation_experiments/newstest2014.pred.df.json")
+    df = pd.read_json(f"/home/lina/Desktop/Stage/Experiences/results/Hesitation_experiments/newstest2014.ancestral_sampling.df.json")
 
 
 print(f"Number of hesitations between two possible formulations: {df['replace'].count()}")

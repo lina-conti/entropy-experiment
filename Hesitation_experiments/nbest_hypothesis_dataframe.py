@@ -91,11 +91,11 @@ def compare_best_hypothesis(input_path, n):
 if __name__ == "__main__":
 
     N = 5
-    CORPUS = "newstest2014.pred"
+    CORPUS = "newstest2014.ancestral_sampling"
     #POS_TAGS = False
     COMPARE_ALL = True
 
-    file = f"/home/lina/Desktop/Stage/Modified_data/{CORPUS}.eng"
+    file = f"/home/lina/Desktop/Stage/Experiences/results/Hesitation_experiments/{CORPUS}.eng"
     if COMPARE_ALL:
         df = compare_all_hypotheses(file, N)
     else:
