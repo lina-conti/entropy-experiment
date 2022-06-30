@@ -8,7 +8,7 @@ import sys
 sys.path.insert(0, '/home/lina/Desktop/Stage/Experiences/code')
 from utils import *
 from lingpy.align.multiple import mult_align
-import stanza
+from sacremoses import MosesTokenizer
 import difflib
 
 
@@ -33,20 +33,20 @@ def compare_all_hypotheses(input_path, n):
     hypothesis to the other (all the n-best hypotheses are compared two-by-two)
     """
     df = pd.DataFrame(columns=("sentence", "hypotheses", "replace", "insert", "delete"))
-    tokenizer = spm.SentencePieceProcessor(model_file='/home/lina/Desktop/Stage/tokenizers/en_tokenization.model')
+    mt = MosesTokenizer(lang='en')
 
     hypothesis = []
     s = 0
     with open(input_path, 'r') as infile:
         for l, line in enumerate(infile):
-            hypothesis.append(tokenizer.decode(line.split()))
+            hypothesis.append(line)
             if (l+1)%n == 0:
                 s += 1
                 for i in range(n-1):
                     for j in range(i, n):
                         if i == j:
                             continue
-                        modifications = get_modifications(hypothesis[i].split(), hypothesis[j].split())
+                        modifications = get_modifications(mt.tokenize(hypothesis[i], return_str=True).split(), hypothesis[j].split())
                         new_row = pd.DataFrame({"sentence": s,
                                     "hypotheses": [tuple([i+1,j+1])],
                                     "replace": [modifications['replace'] if 'replace' in modifications else None],
@@ -65,7 +65,7 @@ def compare_best_hypothesis(input_path, n):
     hypothesis to the other (only the 1-best hypothesis is compared with all others)
     """
     df = pd.DataFrame(columns=("sentence", "hypotheses", "replace", "insert", "delete"))
-    tokenizer = spm.SentencePieceProcessor(model_file='/home/lina/Desktop/Stage/tokenizers/en_tokenization.model')
+    mt = MosesTokenizer(lang='en')
 
     hypothesis = []
     s = 0
@@ -89,16 +89,21 @@ def compare_best_hypothesis(input_path, n):
 
 if __name__ == "__main__":
 
-    N = 5
-    CORPUS = "newstest2014.ancestral_sampling"
-    #POS_TAGS = False
-    COMPARE_ALL = True
+    parser = argparse.ArgumentParser(description='Compares different translation \
+    hypothesis and writes the results to a csv file.')
+    parser.add_argument('n', help='number of translation hypothesis \
+    for each sentence', type=int)
+    parser.add_argument('corpus_path', help='path to the corpus to study')
+    parser.add_argument('output_path', help='where to save the results')
+    parser.add_argument('--compare_all', help='whether to compare all hypotheses \
+    among themselves or only the 1-best to each of the others', action='store_true')
+    args = parser.parse_args()
 
-    file = f"/home/lina/Desktop/Stage/Experiences/results/Hesitation_experiments/{CORPUS}.eng"
+    file = f"/home/lina/Desktop/Stage/Experiences/results/Hesitation_experiments/{CORPUS}"
     if COMPARE_ALL:
         df = compare_all_hypotheses(file, N)
     else:
         df = compare_best_hypothesis(file, N)
 
     print(df)
-    df.to_json(f'/home/lina/Desktop/Stage/Experiences/results/Hesitation_experiments/{CORPUS}.df.json')
+    df.to_csv(f'/home/lina/Desktop/Stage/Experiences/results/Hesitation_experiments/{CORPUS}.df.csv')
