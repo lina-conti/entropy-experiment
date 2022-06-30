@@ -46,7 +46,8 @@ def compare_all_hypotheses(input_path, n):
                     for j in range(i, n):
                         if i == j:
                             continue
-                        modifications = get_modifications(mt.tokenize(hypothesis[i], return_str=True).split(), hypothesis[j].split())
+                        modifications = get_modifications(mt.tokenize(hypothesis[i], return_str=True).split(),
+                         mt.tokenize(hypothesis[j], return_str=True).split())
                         new_row = pd.DataFrame({"sentence": s,
                                     "hypotheses": [tuple([i+1,j+1])],
                                     "replace": [modifications['replace'] if 'replace' in modifications else None],
@@ -99,11 +100,9 @@ if __name__ == "__main__":
     among themselves or only the 1-best to each of the others', action='store_true')
     args = parser.parse_args()
 
-    file = f"/home/lina/Desktop/Stage/Experiences/results/Hesitation_experiments/{CORPUS}"
-    if COMPARE_ALL:
-        df = compare_all_hypotheses(file, N)
+    if args.compare_all:
+        df = compare_all_hypotheses(args.corpus_path, args.n)
     else:
-        df = compare_best_hypothesis(file, N)
+        df = compare_best_hypothesis(args.corpus_path, args.n)
 
-    print(df)
-    df.to_csv(f'/home/lina/Desktop/Stage/Experiences/results/Hesitation_experiments/{CORPUS}.df.csv')
+    df.to_csv(args.output_path)
