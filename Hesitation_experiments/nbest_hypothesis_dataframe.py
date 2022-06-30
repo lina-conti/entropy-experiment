@@ -8,7 +8,6 @@ import sys
 sys.path.insert(0, '/home/lina/Desktop/Stage/Experiences/code')
 from utils import *
 from lingpy.align.multiple import mult_align
-import sentencepiece as spm
 import stanza
 import difflib
 
