@@ -17,7 +17,7 @@ with open(args.corpus_path, "w") as f:
     for s, sentence in enumerate(text_bpe):
         with Halo(text=f"Detokenizing sentence {s}.", spinner="dots"):
             tokenizer = spm.SentencePieceProcessor(model_file='/home/lina/Desktop/Stage/tokenizers/en_tokenization.model')
-            f.write(tokenizer.decode(sentence.split()) + '\n')
+            f.write(" ".join(tokenizer.decode(sentence.split())) + '\n')
 
 datetime_obj = datetime.datetime.now()
 print(f"{datetime_obj.time()} - Finished detokenizing corpus.")
