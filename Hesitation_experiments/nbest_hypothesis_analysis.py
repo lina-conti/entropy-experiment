@@ -23,7 +23,14 @@ with Halo(text="Doing stats on the dataframe", spinner="dots") as spinner:
     replacements_nb = replacements.count()
     inserts_dels_nb = inserts_dels.count()
     hesitations_nb = replacements_nb + inserts_dels_nb
+
 spinner.succeed()
+
+print(f"Average sequence similarity: {df['sequence_similarity'].mean()}")
+print(f"Average of the maximum sequence similarities by source sentence: "
+      f"{df.groupby('sentence')['sequence_similarity'].max().mean()}")
+print(f"Average of the minimum sequence similarities by source sentence: "
+      f"{df.groupby('sentence')['sequence_similarity'].min().mean()}")
 
 print(f"\nNumber of hesitations between two possible formulations: {replacements_nb}"
       f" ({replacements_nb * 100 / hesitations_nb :.2f}% of hesitations)")

@@ -40,7 +40,8 @@ def get_modifications(sentenceA, sentenceB, nlp):
         if tag == 'insert':
             word_editions[tag].append(" ".join(wordsB[j1:j2]))
             pos_editions[tag].append(" ".join(posB[j1:j2]))
-    return word_editions, pos_editions
+    similarity = matcher.ratio()
+    return word_editions, pos_editions, similarity
 
 
 def compare_all_hypotheses(input_path, n):
@@ -64,9 +65,10 @@ def compare_all_hypotheses(input_path, n):
                         for j in range(i, n):
                             if i == j:
                                 continue
-                            modifications, modifications_pos = get_modifications(hypothesis[i], hypothesis[j], nlp)
+                            modifications, modifications_pos, similarity = get_modifications(hypothesis[i], hypothesis[j], nlp)
                             new_row = pd.DataFrame({"sentence": s,
                                         "hypotheses": [tuple([i+1,j+1])],
+                                        "sequence_similarity": similarity,
                                         "replace": [modifications['replace'] if 'replace' in modifications else None],
                                         "insert": [modifications['insert'] if 'insert' in modifications else None],
                                         "delete": [modifications['delete'] if 'delete' in modifications else None],
@@ -97,9 +99,10 @@ def compare_best_hypothesis(input_path, n):
                 s += 1
                 with Halo(text=f"Comparing hypotheses for sentence {s}.", spinner="dots"):
                     for j in range(1, n):
-                        modifications, modifications_pos = get_modifications(hypothesis[0], hypothesis[j], nlp)
+                        modifications, modifications_pos, similarity = get_modifications(hypothesis[0], hypothesis[j], nlp)
                         new_row = pd.DataFrame({"sentence": s,
                                     "hypotheses": [tuple([1,j+1])],
+                                    "sequence_similarity": similarity,
                                     "replace": [modifications['replace'] if 'replace' in modifications else None],
                                     "insert": [modifications['insert'] if 'insert' in modifications else None],
                                     "delete": [modifications['delete'] if 'delete' in modifications else None],
@@ -115,7 +118,7 @@ def compare_best_hypothesis(input_path, n):
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description='Compares different translation \
-    hypothesis and writes the results to a csv file.')
+    hypothesis and writes the results to a file.')
     parser.add_argument('n', help='number of translation hypothesis \
     for each sentence', type=int)
     parser.add_argument('corpus_path', help='path to the corpus to study')
@@ -132,7 +135,13 @@ if __name__ == "__main__":
     else:
         df = compare_best_hypothesis(args.corpus_path, args.n)
 
-    df.to_csv(args.output_path)
+    if args.output_path.endswith("csv"):
+        df.to_csv(args.output_path)
+    elif args.output_path.endswith("json"):
+        df.to_json(args.output_path)
+    else:
+        print("Extension not recognized, results could not be saved.")
+        exit()
 
     datetime_obj = datetime.datetime.now()
     print(f"{datetime_obj.time()} - Finished comparing translation hypotheses.\n"
