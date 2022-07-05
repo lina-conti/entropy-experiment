@@ -297,3 +297,86 @@ def to_sentence(predicted_ids, model):
 def difference_highest_second(prob_distribution: np.ndarray):
     parted_list = np.partition(prob_distribution, -2)
     return parted_list[-1] - parted_list[-2]
+
+def mistake_stats(src_corpus: str, trg_corpus: str, model: Model,
+                  max_output_length: int) -> (pd.DataFrame, int, int):
+
+    bos_index = model.bos_index
+    correct_gold = 0
+    correct_predicted = 0
+    df = pd.DataFrame([[0, 0], [0, 0]],
+                    index=["correct predictions", "incorrect predictions"],
+                    columns=["gold history", "predicted history"])
+
+    with open(src_corpus) as f_src:
+        with open(trg_corpus) as f_trg:
+            s = 0
+            for sentence_fr, sentence_en in zip(f_src, f_trg):
+                s += 1
+                print("translating sentence ", s)
+
+                encoder_output = encode_sentence(sentence_fr.strip().split(), model)
+
+                src_mask = torch.tensor([[[True for _ in range(encoder_output.shape[1])]]])
+
+                target = [model.trg_vocab.stoi[token] for token in sentence_en.strip().split() + [EOS_TOKEN]]
+
+                ys = encoder_output.new_full([1, 1], bos_index, dtype=torch.long)
+                ys_gold = encoder_output.new_full([1, 1], bos_index, dtype=torch.long)
+                trg_mask = src_mask.new_ones([1, 1, 1])
+
+                for i, gold_trg_token in enumerate(target):
+                    # forced decoding
+                    model.eval()
+                    with torch.no_grad():
+                        logits, _, _, _ = model(
+                            return_type="decode",
+                            trg_input=ys_gold,
+                            encoder_output=encoder_output,
+                            encoder_hidden=None,
+                            src_mask=src_mask,
+                            unroll_steps=None,
+                            decoder_hidden=None,
+                            trg_mask=trg_mask
+                        )
+                    logits = logits[:, -1]
+                    max_value, pred_token_forced = torch.max(logits, dim=1)
+                    pred_token_forced = pred_token_forced.data.unsqueeze(-1)
+                    if pred_token_forced != gold_trg_token:
+                        df["gold history"]["incorrect predictions"] += 1
+                    else:
+                        df["gold history"]["correct predictions"] += 1
+
+                    # greedy_decoding
+                    model.eval()
+                    with torch.no_grad():
+                        logits, _, _, _ = model(
+                            return_type="decode",
+                            trg_input=ys,
+                            encoder_output=encoder_output,
+                            encoder_hidden=None,
+                            src_mask=src_mask,
+                            unroll_steps=None,
+                            decoder_hidden=None,
+                            trg_mask=trg_mask
+                        )
+                    logits = logits[:, -1]
+                    max_value, pred_token_greedy = torch.max(logits, dim=1)
+                    pred_token_greedy = pred_token_greedy.data.unsqueeze(-1)
+                    if pred_token_forced != gold_trg_token:
+                        df["predicted history"]["incorrect predictions"] += 1
+                    else:
+                        df["predicted history"]["correct predictions"] += 1
+
+                    if pred_token_forced != pred_token_greedy:
+                        if pred_token_forced == gold_trg_token:
+                            correct_gold += 1
+                        if pred_token_greedy == gold_trg_token:
+                            correct_predicted += 1
+
+                    ys = torch.cat([ys, IntTensor([[pred_token_greedy]])], dim=1)
+                    print(ys)
+                    ys_gold = torch.cat([ys_gold, IntTensor([[gold_trg_token]])], dim=1)
+                    print(ys_gold)
+
+    return df, correct_gold, correct_predicted
