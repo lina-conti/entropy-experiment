@@ -205,8 +205,6 @@ def top_k_sampling(
         k: int):
 
     """
-    WORK IN PROGRESS
-
     Parameters
     ----------
     - model: a JoeyNMT model
