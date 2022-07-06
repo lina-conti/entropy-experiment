@@ -18,10 +18,6 @@ def alignment_distance(sentenceA, sentenceB, aligner):
     l2 = [x2 for x1,x2 in alignements["inter"]]
 
     correlation, p_value = kendalltau(l1, l2)
-    if pd.isna(correlation):
-        print("correlation is nan")
-        print(l1)
-        print(l2)
     return correlation
 
 
@@ -54,36 +50,26 @@ def average_alignement_distances(input_path, n, compare_all):
                                 if i == j:
                                     continue
                                 align_dist = alignment_distance(hypotheses[i], hypotheses[j], aligner)
+                                if not pd.isna(align_dist):
+                                    average_dist += align_dist
+                                    if align_dist > max_dist:
+                                        max_dist = align_dist
+                                    if align_dist < min_dist:
+                                        min_dist = align_dist
+                                    nb_comparisons += 1
+                        else:
+                            align_dist = alignment_distance(hypotheses[0], hypotheses[i+1], aligner)
+                            if not pd.isna(align_dist):
                                 average_dist += align_dist
-                                if pd.isna(align_dist):
-                                    print("align dist is nan")
-                                    print(hypotheses[i])
-                                    print(hypotheses[j])
                                 if align_dist > max_dist:
                                     max_dist = align_dist
                                 if align_dist < min_dist:
                                     min_dist = align_dist
                                 nb_comparisons += 1
-                        else:
-                            align_dist = alignment_distance(hypotheses[0], hypotheses[i+1], aligner)
-                            average_dist += align_dist
-                            if pd.isna(align_dist):
-                                print("align dist is nan")
-                                print(hypotheses[0])
-                                print(hypotheses[i+1])
-                            if align_dist > max_dist:
-                                max_dist = align_dist
-                            if align_dist < min_dist:
-                                min_dist = align_dist
-                            nb_comparisons += 1
                     average_min += min_dist
                     average_max += max_dist
                     hypotheses = []
-    print(average_dist)
-    print(nb_comparisons)
     average_dist = average_dist / nb_comparisons
-    if pd.isna(average_dist):
-        print("average dist is nan")
     average_min = average_min / s
     average_max = average_max / s
     return average_dist, average_min, average_max
