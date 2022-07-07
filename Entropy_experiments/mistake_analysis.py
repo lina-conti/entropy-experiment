@@ -43,16 +43,28 @@ def predict_wrong_token(gold_trg_token: int, encoder_output: Tensor,
             return pred_trg_token
         logits[0][pred_trg_token] = float('-inf')
 
+def history_one_mistake(gold_history: Tensor, predicted_history: Tensor) -> Tensor:
+    differences = gold_history != predicted_history
+    indices = differences.nonzero()
+    if not indices.numel():
+        return gold_history
+    rng = np.random.default_rng()
+    i = rng.choice(indices)[1]
+    new_history = gold_history.detach().clone()
+    new_history[0][i] = predicted_history[0][i]
+    return new_history
+
+
 def mistake_stats(src_corpus: str, trg_corpus: str, model: Model,
                   max_output_length: int) -> (pd.DataFrame, int, int):
 
     bos_index = model.bos_index
     only_gold = 0
     only_predicted = 0
-    df = pd.DataFrame([[0, 0, 0], [0, 0, 0]],
+    df = pd.DataFrame([[0, 0, 0, 0], [0, 0, 0, 0]],
                     index=["correct predictions", "incorrect predictions"],
-                    columns=["gold history", "predicted history", "last token mistake"])
-                    #, "1 predicted mistake",
+                    columns=["gold history", "predicted history",
+                        "1 predicted mistake", "last token mistake"])
 
     with open(src_corpus) as f_src:
         with open(trg_corpus) as f_trg:
@@ -67,9 +79,8 @@ def mistake_stats(src_corpus: str, trg_corpus: str, model: Model,
 
                     target = [model.trg_vocab.stoi[token] for token in sentence_en.strip().split() + [EOS_TOKEN]]
 
-                    ys = encoder_output.new_full([1, 1], bos_index, dtype=torch.long)
-                    ys_gold = encoder_output.new_full([1, 1], bos_index, dtype=torch.long)
-                    ys_last = encoder_output.new_full([1, 1], bos_index, dtype=torch.long)
+                    ys = ys_gold = ys_last = ys_1mistake = encoder_output.new_full(
+                                                [1, 1], bos_index, dtype=torch.long)
                     trg_mask = src_mask.new_ones([1, 1, 1])
 
                     for i, gold_trg_token in enumerate(target):
@@ -81,7 +92,7 @@ def mistake_stats(src_corpus: str, trg_corpus: str, model: Model,
                         else:
                             df["gold history"]["correct predictions"] += 1
 
-                        # greedy_decoding
+                        # greedy decoding
                         pred_token_greedy = predict_token(encoder_output,
                             ys, src_mask, trg_mask, model)
                         if pred_token_greedy != gold_trg_token:
@@ -103,11 +114,20 @@ def mistake_stats(src_corpus: str, trg_corpus: str, model: Model,
                         else:
                             df["last token mistake"]["correct predictions"] += 1
 
+                        # history with only one predicted mistake
+                        pred_token_1mistake = predict_token(encoder_output,
+                            ys_1mistake, src_mask, trg_mask, model)
+                        if pred_token_1mistake != gold_trg_token:
+                            df["1 predicted mistake"]["incorrect predictions"] += 1
+                        else:
+                            df["1 predicted mistake"]["correct predictions"] += 1
+
                         ys = torch.cat([ys, IntTensor([[pred_token_greedy]])], dim=1)
                         ys_gold = torch.cat([ys_gold, IntTensor([[gold_trg_token]])], dim=1)
                         pred_wrong_token = predict_wrong_token(gold_trg_token,
                             encoder_output, ys, src_mask, trg_mask, model)
                         ys_last = torch.cat([ys_gold, IntTensor([[pred_wrong_token]])], dim=1)
+                        ys_1mistake = history_one_mistake(ys_gold, ys)
 
     return df, only_gold, only_predicted
 
