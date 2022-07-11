@@ -3,7 +3,6 @@ sys.path.insert(0, '/home/lina/Desktop/Stage/Experiences/code')
 from utils import *
 
 from sacrebleu.metrics import BLEU
-import itertools
 
 def hyps_to_lists(file_path: str, n: int) -> List[List[str]]:
     with open(file_path) as f:
