@@ -2,8 +2,6 @@ import sys
 sys.path.insert(0, '/home/lina/Desktop/Stage/Experiences/code')
 from utils import *
 
-itertools.zip()
-
 def predict_token(encoder_output: Tensor, history: Tensor, src_mask: Tensor,
                                         trg_mask:Tensor, model: Model) -> int:
     model.eval()
@@ -56,9 +54,26 @@ def history_one_mistake(gold_history: Tensor, predicted_history: Tensor) -> Tens
     new_history[0][i] = predicted_history[0][i]
     return new_history
 
+def compute_percentages(df, one_greedy_correct, one_bs_correct):
+    df_percentages = pd.concat([ \
+        df.apply(lambda x: x.correct_predictions * 100 / (x.correct_predictions \
+         + x.incorrect_predictions), axis=0).rename("percentage correct"), \
+        pd.Series(["-", "-", "-", "-", "-", "-"], name="standard deviation", \
+        index = df.columns)], axis=1)
+
+    df_percentages = df_percentages.transpose()
+
+    df_percentages.loc["standard deviation", "1 greedy mistake"] = one_greedy_correct.std() \
+        * 100 / (df.loc["correct_predictions", "1 greedy mistake"] + \
+        df.loc["incorrect_predictions", "1 greedy mistake"])
+    df_percentages.loc["standard deviation", "1 beam search mistake"] = one_bs_correct.std() \
+        * 100 / (df.loc["correct_predictions", "1 beam search mistake"] + \
+        df.loc["incorrect_predictions", "1 beam search mistake"])
+
+    return df_percentages
 
 def mistake_stats(src_corpus: str, trg_corpus: str, pred_corpus: str, model: Model,
-                  max_output_length: int) -> (pd.DataFrame, int, int):
+                  max_output_length: int) -> (pd.DataFrame, pd.DataFrame, int, int):
 
     bos_index = model.bos_index
     only_gold = 0
@@ -66,7 +81,8 @@ def mistake_stats(src_corpus: str, trg_corpus: str, pred_corpus: str, model: Mod
     df = pd.DataFrame([[0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0]],
                     index=["correct_predictions", "incorrect_predictions"],
                     columns=["gold history", "greedy history", "beam search history",
-                        "1 greedy mistake", "1 beam search mistake", "last token mistake"])
+                        "1 greedy mistake", "1 beam search mistake", "last token mistake"],
+                    dtype='object')
 
     one_greedy_correct = np.zeros(10)
     one_greedy_incorrect = np.zeros(10)
@@ -171,19 +187,9 @@ def mistake_stats(src_corpus: str, trg_corpus: str, pred_corpus: str, model: Mod
     df.loc["incorrect_predictions", "1 beam search mistake"] = one_bs_incorrect.mean()
     df.loc["correct_predictions", "1 beam search mistake"] = one_bs_correct.mean()
 
-    df = df.append(df.apply(
-        lambda x: x.correct_predictions * 100 / (x.correct_predictions + x.incorrect_predictions),
-        axis=0).rename("percentage correct"))
-    df = pd.concat([df, pd.Series(["-", "-", "-", "-", "-", "-"], name="standard deviation")], ignore_index=True)
-    print(df)
-    df.loc["standard deviation", "1 greedy mistake"] = one_greedy_correct.std() \
-        * 100 / (df.loc["correct_predictions", "1 greedy mistake"] + \
-        df.loc["incorrect_predictions", "1 greedy mistake"])
-    df.loc["standard deviation", "1 beam search mistake"] = one_bs_correct.std() \
-        * 100 / (df.loc["correct_predictions", "1 beam search mistake"] + \
-        df.loc["incorrect_predictions", "1 beam search mistake"])
+    df_percentages = compute_percentages(df, one_greedy_correct, one_bs_correct)
 
-    return df, only_gold, only_predicted
+    return df, df_percentages, only_gold, only_predicted
 
 if __name__ == "__main__":
 
@@ -203,10 +209,11 @@ if __name__ == "__main__":
     max_output_length = load_config("/home/lina/Desktop/Stage/transformer_wmt15_fr2en/transformer_wmt15_fr2en.yaml")["training"]["max_output_length"]
 
 
-    df, only_gold, only_predicted = mistake_stats(args.source_corpus,
+    df, df_percentages, only_gold, only_predicted = mistake_stats(args.source_corpus,
             args.target_corpus, args.predicted_corpus, model, max_output_length)
 
-    print(df.to_string())
+    print(df.to_string(), "\n")
+    print(df_percentages.to_string())
     print(f"\nNumber of tokens that are correctly predicted with forced decoding but"
           f" not with greedy decoding: {only_gold}.")
     print(f"\nNumber of tokens that are correctly predicted with greedy decoding but"
