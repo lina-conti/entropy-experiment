@@ -13,12 +13,16 @@ spinner.succeed()
 
 with Halo(text="Doing stats on the dataframe", spinner="dots") as spinner:
     replacements = pd.Series([edition for liste in df["replace"].dropna().apply(eval) for edition in liste])
+    replacements = replacements.apply(sorted).apply(tuple) # to avoid doubles in different orders
     inserts_dels = pd.Series([edition for liste in df["insert"].dropna().apply(eval) for edition in liste]
                     + [edition for liste in df["delete"].dropna().apply(eval) for edition in liste])
+    all_hesitations = pd.concat([inserts_dels.apply(lambda x: ("∅", x)), replacements])
 
     pos_replacements = pd.Series([edition for liste in df["replace_pos"].dropna().apply(eval) for edition in liste])
+    pos_replacements = pos_replacements.apply(sorted).apply(tuple) # to avoid doubles in different orders
     pos_inserts_dels = pd.Series([edition for liste in df["insert_pos"].dropna().apply(eval) for edition in liste]
                     + [edition for liste in df["delete_pos"].dropna().apply(eval) for edition in liste])
+    all_pos_hesitations = pd.concat([pos_inserts_dels.apply(lambda x: ("∅", x)), pos_replacements])
 
     replacements_nb = replacements.count()
     inserts_dels_nb = inserts_dels.count()
@@ -26,7 +30,7 @@ with Halo(text="Doing stats on the dataframe", spinner="dots") as spinner:
 
 spinner.succeed()
 
-print(f"Average sequence similarity: {df['sequence_similarity'].mean()}")
+print(f"\nAverage sequence similarity: {df['sequence_similarity'].mean()}")
 print(f"Average of the maximum sequence similarities by source sentence: "
       f"{df.groupby('sentence')['sequence_similarity'].max().mean()}")
 print(f"Average of the minimum sequence similarities by source sentence: "
@@ -34,28 +38,40 @@ print(f"Average of the minimum sequence similarities by source sentence: "
 
 print(f"\nNumber of hesitations between two possible formulations: {replacements_nb}"
       f" ({replacements_nb * 100 / hesitations_nb :.2f}% of hesitations)")
-print(f"Of these, \n"
-    f"- {pd.Series((len(r[0].split())==1) ^ (len(r[1].split())==1) for r in replacements).sum() * 100 / replacements_nb :.2f}"
-    f"% are hesitations between one word and a multiword expression \n"
-    f"- {pd.Series((len(r[0].split())==1) and (len(r[1].split())==1) for r in replacements).sum() * 100 / replacements_nb :.2f}"
-    f"% are hesitations between two single words \n"
-    f"- {pd.Series((len(r[0].split())>1) and (len(r[1].split())>1) for r in replacements).sum() * 100 / replacements_nb :.2f}"
-    f"% are hesitations between two multiword expressions")
-
-print(f"\nNumber of hesitations between including a word or expression or not: "
+print(f"Number of hesitations between including a word or expression or not: "
     f"{inserts_dels_nb} ({inserts_dels_nb * 100 / hesitations_nb :.2f}% of hesitations)")
-print(f"Of these, \n"
-    f"- {pd.Series((len(h.split())==1) for h in inserts_dels).sum() * 100 / inserts_dels_nb :.2f}"
-    f"% are for single words \n"
-    f"- {pd.Series((len(h.split())>1) for h in inserts_dels).sum() * 100 / inserts_dels_nb :.2f}"
-    f"% are for multiword expressions")
 
+print(f"\nAmong hesitations, \n"
+    f"- {pd.Series((len(r[0].split())==1) ^ (len(r[1].split())==1) for r in replacements).sum() * 100 / hesitations_nb :.2f}"
+    f"% are hesitations between one word and a multiword expression \n"
+    f"- {pd.Series((len(r[0].split())==1) and (len(r[1].split())==1) for r in replacements).sum() * 100 / hesitations_nb :.2f}"
+    f"% are hesitations between two single words \n"
+    f"- {pd.Series((len(r[0].split())>1) and (len(r[1].split())>1) for r in replacements).sum() * 100 / hesitations_nb :.2f}"
+    f"% are hesitations between two multiword expressions\n"
+    f"- {pd.Series((len(h.split())==1) for h in inserts_dels).sum() * 100 / hesitations_nb :.2f}"
+    f"% are hesitations between including or excluding single words \n"
+    f"- {pd.Series((len(h.split())>1) for h in inserts_dels).sum() * 100 / hesitations_nb :.2f}"
+    f"% are hesitations between including or excluding multiword expressions\n")
+
+print(f"{all_pos_hesitations.apply(lambda x: x[0] != x[1]).sum() * 100 / hesitations_nb :.2f}"
+      f"% of hesitations have different parts of speech.")
+
+
+# separating replacements and insertions/deletions
+"""
 print("\nThe most frequent hesitations between two possible formulations, followed by the number of times they occur, are:")
-print(replacements.value_counts().head())
+print(replacements.value_counts().head(20) * 100 / replacements.count())
 print("\nThe most frequent POS for such hesitations, followed by the number of times they occur, are:")
-print(pos_replacements.value_counts().head())
+print(pos_replacements.value_counts().head(20) * 100 / pos_replacements.count())
 
 print("\nThe most frequent hesitations between including a word or not, followed by the number of times they occur, are:")
-print(inserts_dels.value_counts().head())
+print(inserts_dels.value_counts().head(20) * 100 / inserts_dels.count())
 print("\nThe most frequent POS for such hesitations, followed by the number of times they occur, are:")
-print(pos_inserts_dels.value_counts().head())
+print(pos_inserts_dels.value_counts().head(20) * 100 / pos_inserts_dels.count())
+"""
+
+# aggregating all types of hesitation
+print("\nThe most frequent hesitations, followed by the percentage of hesitations they make up, are:")
+print(all_hesitations.value_counts().head(20) * 100 / all_hesitations.count())
+print("\nThe most frequent hesitation POS, followed by the percentage of hesitations they make up, are:")
+print(all_pos_hesitations.value_counts().head(20) * 100 / all_pos_hesitations.count())

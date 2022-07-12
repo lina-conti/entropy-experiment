@@ -63,12 +63,12 @@ def compute_percentages(df, one_greedy_correct, one_bs_correct):
 
     df_percentages = df_percentages.transpose()
 
-    df_percentages.loc["standard deviation", "1 greedy mistake"] = one_greedy_correct.std() \
-        * 100 / (df.loc["correct_predictions", "1 greedy mistake"] + \
-        df.loc["incorrect_predictions", "1 greedy mistake"])
-    df_percentages.loc["standard deviation", "1 beam search mistake"] = one_bs_correct.std() \
-        * 100 / (df.loc["correct_predictions", "1 beam search mistake"] + \
-        df.loc["incorrect_predictions", "1 beam search mistake"])
+    df_percentages.loc["standard deviation", "1 greedy mistake*"] = one_greedy_correct.std() \
+        * 100 / (df.loc["correct_predictions", "1 greedy mistake*"] + \
+        df.loc["incorrect_predictions", "1 greedy mistake*"])
+    df_percentages.loc["standard deviation", "1 beam search mistake*"] = one_bs_correct.std() \
+        * 100 / (df.loc["correct_predictions", "1 beam search mistake*"] + \
+        df.loc["incorrect_predictions", "1 beam search mistake*"])
 
     return df_percentages
 
@@ -81,7 +81,7 @@ def mistake_stats(src_corpus: str, trg_corpus: str, pred_corpus: str, model: Mod
     df = pd.DataFrame([[0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0]],
                     index=["correct_predictions", "incorrect_predictions"],
                     columns=["gold history", "greedy history", "beam search history",
-                        "1 greedy mistake", "1 beam search mistake", "last token mistake"],
+                        "1 greedy mistake*", "1 beam search mistake*", "last token mistake"],
                     dtype='object')
 
     one_greedy_correct = np.zeros(10)
@@ -182,10 +182,10 @@ def mistake_stats(src_corpus: str, trg_corpus: str, pred_corpus: str, model: Mod
                             else:
                                 ys_bs = None
 
-    df.loc["incorrect_predictions", "1 greedy mistake"] = one_greedy_incorrect.mean()
-    df.loc["correct_predictions", "1 greedy mistake"] = one_greedy_correct.mean()
-    df.loc["incorrect_predictions", "1 beam search mistake"] = one_bs_incorrect.mean()
-    df.loc["correct_predictions", "1 beam search mistake"] = one_bs_correct.mean()
+    df.loc["incorrect_predictions", "1 greedy mistake*"] = one_greedy_incorrect.mean()
+    df.loc["correct_predictions", "1 greedy mistake*"] = one_greedy_correct.mean()
+    df.loc["incorrect_predictions", "1 beam search mistake*"] = one_bs_incorrect.mean()
+    df.loc["correct_predictions", "1 beam search mistake*"] = one_bs_correct.mean()
 
     df_percentages = compute_percentages(df, one_greedy_correct, one_bs_correct)
 
@@ -198,12 +198,11 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description='Compares the mistakes \
     when using forced decoding versus greedy decoding.')
-    parser.add_argument("source_corpus", help="path to the source corpus")
-    parser.add_argument("target_corpus", help="path to the target corpus")
+    parser.add_argument("source_corpus", help="path to the source corpus, tokenized with bpe")
+    parser.add_argument("target_corpus", help="path to the target corpus, tokenized with bpe")
     parser.add_argument("predicted_corpus", help="path to the corpus translated \
-    by the system using beam search")
-    #args = parser.parse_args()
-    args = parser.parse_args("/home/lina/Desktop/Stage/Modified_data/X-a-fini.small.bpe.fra /home/lina/Desktop/Stage/Modified_data/X-a-fini.small.bpe.eng /home/lina/Desktop/Stage/Experiences/results/Hesitation_experiments/tests/X-a-fini.small.bpe.eng".split())
+    by the system using beam search, tokenized with bpe")
+    args = parser.parse_args()
 
     model = load_model("/home/lina/Desktop/Stage/transformer_wmt15_fr2en/transformer_wmt15_fr2en.yaml")
     max_output_length = load_config("/home/lina/Desktop/Stage/transformer_wmt15_fr2en/transformer_wmt15_fr2en.yaml")["training"]["max_output_length"]
@@ -218,6 +217,8 @@ if __name__ == "__main__":
           f" not with greedy decoding: {only_gold}.")
     print(f"\nNumber of tokens that are correctly predicted with greedy decoding but"
           f" not with forced decoding: {only_predicted}.\n")
+
+    print("*For these columns, the experiment was repeated 10 times, the results shown are the averages over all 10 experiments.\n")
 
     datetime_obj = datetime.datetime.now()
     print(f"{datetime_obj.time()} - Finished analysing the translations.")
