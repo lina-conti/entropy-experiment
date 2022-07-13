@@ -160,6 +160,8 @@ def mistake_stats(src_corpus: str, trg_corpus: str, pred_corpus: str, model: Mod
                                     df.loc["incorrect_predictions", "beam search history"] += 1
                                 else:
                                     df.loc["correct_predictions", "beam search history"] += 1
+                            else:
+                                df.loc["incorrect_predictions", "beam search history"] += 1
 
                             # history with only one beam search mistake
                             if ys_bs != None:
@@ -171,6 +173,8 @@ def mistake_stats(src_corpus: str, trg_corpus: str, pred_corpus: str, model: Mod
                                         one_bs_incorrect[i] += 1
                                     else:
                                         one_bs_correct[i] += 1
+                            else:
+                                one_bs_incorrect[i] += 10
 
                             ys = torch.cat([ys, IntTensor([[pred_token_greedy]])], dim=1)
                             ys_gold = torch.cat([ys_gold, IntTensor([[gold_trg_token]])], dim=1)
