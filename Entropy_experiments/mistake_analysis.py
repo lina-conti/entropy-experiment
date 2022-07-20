@@ -2,183 +2,100 @@ import sys
 sys.path.insert(0, '/home/lina/Desktop/Stage/Experiences/code')
 from utils import *
 
-def compute_percentages(df, one_greedy_correct, one_bs_correct):
-    df_percentages = pd.concat([ \
-        df.apply(lambda x: x.correct_predictions * 100 / (x.correct_predictions \
-         + x.incorrect_predictions), axis=0).rename("percentage correct"), \
-        pd.Series(["-", "-", "-", "-", "-", "-"], name="standard deviation", \
-        index = df.columns)], axis=1)
+def analyse_sentence_mistakes(stats, tokens_list, sentence_src, sentence_trg, model, bos_index):
+    encoder_output = encode_sentence(sentence_src.strip().split(), model)
+    src_mask = torch.tensor([[[True for _ in range(encoder_output.shape[1])]]])
+    gold_target = [model.trg_vocab.stoi[token] for token in sentence_trg.strip().split() + [EOS_TOKEN]]
+    ys_gold = encoder_output.new_full([1, 1], bos_index, dtype=torch.long)
+    trg_mask = src_mask.new_ones([1, 1, 1])
 
-    df_percentages = df_percentages.transpose()
+    for gold_trg_token in gold_target:
+        pred_trg_token, log_probs = predict_token(encoder_output, ys_gold, \
+            src_mask, trg_mask, model, return_log_probs=True)
 
-    df_percentages.loc["standard deviation", "1 greedy mistake*"] = one_greedy_correct.std() \
-        * 100 / (df.loc["correct_predictions", "1 greedy mistake*"] + \
-        df.loc["incorrect_predictions", "1 greedy mistake*"])
-    df_percentages.loc["standard deviation", "1 beam search mistake*"] = one_bs_correct.std() \
-        * 100 / (df.loc["correct_predictions", "1 beam search mistake*"] + \
-        df.loc["incorrect_predictions", "1 beam search mistake*"])
+        if pred_trg_token != gold_trg_token:
+            stats["incorrect_nb"] += 1
+            stats["prob_incorrect"] += log_probs[0][pred_trg_token].item()
+            stats["entropy_incorrect"] += entropy(torch.exp(log_probs[0]).detach().cpu().numpy())
+            tokens_list.append(\
+                [model.trg_vocab.itos[pred_trg_token],\
+                model.trg_vocab.itos[gold_trg_token],\
+                log_probs[0][pred_trg_token].item(),\
+                log_probs[0][gold_trg_token].item()])
+        else:
+            stats["correct_nb"] += 1
+            stats["prob_correct"] += log_probs[0][pred_trg_token].item()
+            stats["entropy_correct"] += entropy(torch.exp(log_probs[0]).detach().cpu().numpy())
 
-    return df_percentages
+        ys_gold = torch.cat([ys_gold, IntTensor([[gold_trg_token]])], dim=1)
 
-def mistake_stats(src_corpus: str, trg_corpus: str, pred_corpus: str, model: Model,
-                  max_output_length: int) -> (pd.DataFrame, pd.DataFrame, int, int):
+def mistake_stats(src_corpus: str, trg_corpus: str, model: Model):
 
     bos_index = model.bos_index
-    eos_index = model.eos_index
-    only_gold = 0
-    only_predicted = 0
-    df = pd.DataFrame([[0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0]],
-                    index=["correct_predictions", "incorrect_predictions"],
-                    columns=["gold history", "greedy history", "beam search history",
-                        "1 greedy mistake*", "1 beam search mistake*", "last token mistake"],
-                    dtype='object')
 
-    one_greedy_correct = np.zeros(10)
-    one_greedy_incorrect = np.zeros(10)
-    one_bs_correct = np.zeros(10)
-    one_bs_incorrect = np.zeros(10)
+    tokens_list = []
+    stats = {
+        "prob_correct": 0,
+        "prob_incorrect": 0,
+        "entropy_correct": 0,
+        "entropy_incorrect": 0,
+        "correct_nb": 0,
+        "incorrect_nb": 0
+    }
+
     with open(src_corpus) as f_src:
         with open(trg_corpus) as f_trg:
-            with open(pred_corpus) as f_pred:
-                s = 0
-                for sentence_fr, sentence_en, sentence_pred in zip(f_src, f_trg, f_pred):
-                    s += 1
-                    with Halo(text=f"translating sentence {s}", spinner="dots"):
+            s = 0
+            for sentence_src, sentence_trg in zip(f_src, f_trg):
+                s += 1
+                with Halo(text=f"translating sentence {s}", spinner="dots"):
+                    analyse_sentence_mistakes(stats, tokens_list, sentence_src, sentence_trg, model, bos_index)
 
-                        encoder_output = encode_sentence(sentence_fr.strip().split(), model)
+    df_tokens = pd.DataFrame(tokens_list,
+                    columns=["Predicted token", "Gold token", \
+                    "Predicted token log probability", "Gold token log probability"])
 
-                        src_mask = torch.tensor([[[True for _ in range(encoder_output.shape[1])]]])
+    df_res = pd.DataFrame([\
+        [(df_tokens["Predicted token log probability"] - df_tokens["Gold token log probability"]).mean()],\
+         [stats["prob_correct"] / stats["correct_nb"]],\
+         [stats["prob_incorrect"] / stats["incorrect_nb"]],\
+         [stats["entropy_correct"] / stats["correct_nb"]],\
+         [stats["entropy_incorrect"] / stats["incorrect_nb"]]],
+        index=["Average difference between predicted token and gold token log probabilities",\
+         "Average log probability of the predicted token in a correct decision",\
+         "Average log probability of the predicted token in an incorrect decision",\
+         "Average entropy in a correct decision",\
+         "Average entropy in an incorrect decision"],
+        columns=["Value"],
+        dtype='object')
 
-                        gold_target = [model.trg_vocab.stoi[token] for token in sentence_en.strip().split() + [EOS_TOKEN]]
-
-                        pred_target = [model.trg_vocab.stoi[token] for token in sentence_pred.strip().split() + [EOS_TOKEN]]
-
-                        if s != 1:
-                            print()
-                            print("ys gold:\t", to_tokens(ys_gold[0], model))
-                            print("ys greedy:\t", to_tokens(ys[0], model))
-                            print("ys bs:    \t", to_tokens(ys_bs[0], model))
-                            print()
-
-                        ys = ys_gold = ys_last = ys_1mistake = ys_bs = encoder_output.new_full(
-                                                    [1, 1], bos_index, dtype=torch.long)
-                        trg_mask = src_mask.new_ones([1, 1, 1])
-
-                        for gold_trg_token, bs_trg_token in itertools.zip_longest(gold_target, pred_target):
-                            if gold_trg_token == None:
-                                break
-
-                            # forced decoding
-                            pred_token_forced = predict_token(encoder_output,
-                                ys_gold, src_mask, trg_mask, model)
-                            if pred_token_forced != gold_trg_token:
-                                df.loc["incorrect_predictions","gold history"] += 1
-                            else:
-                                df.loc["correct_predictions","gold history"] += 1
-
-                            # greedy decoding
-                            pred_token_greedy = predict_token(encoder_output,
-                                ys, src_mask, trg_mask, model)
-                            if pred_token_greedy != gold_trg_token:
-                                df.loc["incorrect_predictions", "greedy history"] += 1
-                            else:
-                                df.loc["correct_predictions", "greedy history"] += 1
-
-                            if pred_token_forced != pred_token_greedy:
-                                if pred_token_forced == gold_trg_token:
-                                    only_gold += 1
-                                if pred_token_greedy == gold_trg_token:
-                                    only_predicted += 1
-
-                            # history with only one mistake in the last token
-                            pred_token_last = predict_token(encoder_output,
-                                ys_last, src_mask, trg_mask, model)
-                            if pred_token_last != gold_trg_token:
-                                df.loc["incorrect_predictions", "last token mistake"] += 1
-                            else:
-                                df.loc["correct_predictions", "last token mistake"] += 1
-
-                            # history with only one greedy mistake
-                            for i in range(10):
-                                ys_1mistake = history_one_mistake(ys_gold, ys)
-                                pred_token_1mistake = predict_token(encoder_output,
-                                    ys_1mistake, src_mask, trg_mask, model)
-                                if pred_token_1mistake != gold_trg_token:
-                                    one_greedy_incorrect[i] += 1
-                                else:
-                                    one_greedy_correct[i] += 1
-
-                            # beam search decoding
-                            if ys_bs != None:
-                                pred_token_bs = predict_token(encoder_output,
-                                    ys_bs, src_mask, trg_mask, model)
-                                if pred_token_bs != gold_trg_token:
-                                    df.loc["incorrect_predictions", "beam search history"] += 1
-                                else:
-                                    df.loc["correct_predictions", "beam search history"] += 1
-                            else:
-                                df.loc["incorrect_predictions", "beam search history"] += 1
-
-                            # history with only one beam search mistake
-                            for i in range(10):
-                                if ys_bs.size() == ys_gold.size():
-                                    ys_1mistake = history_one_mistake(ys_gold, ys_bs)
-                                    pred_token_1mistake = predict_token(encoder_output,
-                                        ys_1mistake, src_mask, trg_mask, model)
-                                    if pred_token_1mistake != gold_trg_token:
-                                        one_bs_incorrect[i] += 1
-                                    else:
-                                        one_bs_correct[i] += 1
-                                else:
-                                    one_bs_incorrect[i] += 1
-
-                            if ys[0][-1] != eos_index:
-                                ys = torch.cat([ys, IntTensor([[pred_token_greedy]])], dim=1)
-                            ys_gold = torch.cat([ys_gold, IntTensor([[gold_trg_token]])], dim=1)
-                            pred_wrong_token = predict_wrong_token(gold_trg_token,
-                                encoder_output, ys, src_mask, trg_mask, model)
-                            ys_last = torch.cat([ys_gold, IntTensor([[pred_wrong_token]])], dim=1)
-                            if bs_trg_token:
-                                ys_bs = torch.cat([ys_bs, IntTensor([[bs_trg_token]])], dim=1)
-
-
-    df.loc["incorrect_predictions", "1 greedy mistake*"] = one_greedy_incorrect.mean()
-    df.loc["correct_predictions", "1 greedy mistake*"] = one_greedy_correct.mean()
-    df.loc["incorrect_predictions", "1 beam search mistake*"] = one_bs_incorrect.mean()
-    df.loc["correct_predictions", "1 beam search mistake*"] = one_bs_correct.mean()
-
-    df_percentages = compute_percentages(df, one_greedy_correct, one_bs_correct)
-
-    return df, df_percentages, only_gold, only_predicted
+    return df_tokens, df_res
 
 if __name__ == "__main__":
 
     datetime_obj = datetime.datetime.now()
     print(f"{datetime_obj.time()} - Started translating the corpus.")
 
-    parser = argparse.ArgumentParser(description='Compares the mistakes \
-    when using forced decoding versus greedy decoding.')
+    parser = argparse.ArgumentParser(description='Ananlyses the mistakes commited \
+    despite using forced decoding with gold target input.')
     parser.add_argument("source_corpus", help="path to the source corpus, tokenized with bpe")
-    parser.add_argument("target_corpus", help="path to the target corpus, tokenized with bpe")
-    parser.add_argument("predicted_corpus", help="path to the corpus translated \
-    by the system using beam search, tokenized with bpe")
+    parser.add_argument("target_corpus", help="path to the gold target corpus, tokenized with bpe")
+    parser.add_argument("-o", "--output_path", help="path to the csv file where results should be saved")
     args = parser.parse_args()
 
     model = load_model("/home/lina/Desktop/Stage/transformer_wmt15_fr2en/transformer_wmt15_fr2en.yaml")
-    max_output_length = load_config("/home/lina/Desktop/Stage/transformer_wmt15_fr2en/transformer_wmt15_fr2en.yaml")["training"]["max_output_length"]
 
+    df_tokens, df_res = mistake_stats(args.source_corpus, args.target_corpus, model)
 
-    df, df_percentages, only_gold, only_predicted = mistake_stats(args.source_corpus,
-            args.target_corpus, args.predicted_corpus, model, max_output_length)
+    print(df_res.to_string(), "\n")
 
-    print(df.to_string(), "\n")
-    print(df_percentages.to_string())
-    print(f"\nNumber of tokens that are correctly predicted with forced decoding but"
-          f" not with greedy decoding: {only_gold}.")
-    print(f"\nNumber of tokens that are correctly predicted with greedy decoding but"
-          f" not with forced decoding: {only_predicted}.\n")
-
-    print("*For these columns, the experiment was repeated 10 times, the results shown are the averages over all 10 experiments.\n")
+    if args.output_path:
+        with Halo(text=f"saving results", spinner="dots") as spinner:
+            with open(args.output_path,'a') as f:
+                for df in df_res, df_tokens:
+                    df.to_csv(f)
+                    f.write("\n")
+        spinner.succeed(f"Results saved to {args.output_path}")
 
     datetime_obj = datetime.datetime.now()
     print(f"{datetime_obj.time()} - Finished analysing the translations.")

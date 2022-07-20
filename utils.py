@@ -263,7 +263,7 @@ def top_k_sampling(
     return predicted_translation
 
 def predict_token(encoder_output: Tensor, history: Tensor, src_mask: Tensor,
-                                        trg_mask:Tensor, model: Model) -> int:
+                                        trg_mask:Tensor, model: Model, return_log_probs=False):
     model.eval()
     with torch.no_grad():
         logits, _, _, _ = model(
@@ -279,6 +279,8 @@ def predict_token(encoder_output: Tensor, history: Tensor, src_mask: Tensor,
     logits = logits[:, -1]
     max_value, pred_trg_token = torch.max(logits, dim=1)
     pred_trg_token = pred_trg_token.data.unsqueeze(-1)
+    if return_log_probs:
+        return int(pred_trg_token), log_softmax(logits)
     return int(pred_trg_token)
 
 def predict_wrong_token(gold_trg_token: int, encoder_output: Tensor,
