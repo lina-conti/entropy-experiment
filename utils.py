@@ -262,6 +262,58 @@ def top_k_sampling(
 
     return predicted_translation
 
+def predict_token(encoder_output: Tensor, history: Tensor, src_mask: Tensor,
+                                        trg_mask:Tensor, model: Model) -> int:
+    model.eval()
+    with torch.no_grad():
+        logits, _, _, _ = model(
+            return_type="decode",
+            trg_input=history,
+            encoder_output=encoder_output,
+            encoder_hidden=None,
+            src_mask=src_mask,
+            unroll_steps=None,
+            decoder_hidden=None,
+            trg_mask=trg_mask
+        )
+    logits = logits[:, -1]
+    max_value, pred_trg_token = torch.max(logits, dim=1)
+    pred_trg_token = pred_trg_token.data.unsqueeze(-1)
+    return int(pred_trg_token)
+
+def predict_wrong_token(gold_trg_token: int, encoder_output: Tensor,
+        history: Tensor, src_mask: Tensor, trg_mask:Tensor, model: Model) -> int:
+    model.eval()
+    with torch.no_grad():
+        logits, _, _, _ = model(
+            return_type="decode",
+            trg_input=history,
+            encoder_output=encoder_output,
+            encoder_hidden=None,
+            src_mask=src_mask,
+            unroll_steps=None,
+            decoder_hidden=None,
+            trg_mask=trg_mask
+        )
+    logits = logits[:, -1]
+    while(True):
+        max_value, pred_trg_token = torch.max(logits, dim=1)
+        pred_trg_token = int(pred_trg_token.data.unsqueeze(-1))
+        if pred_trg_token != gold_trg_token:
+            return pred_trg_token
+        logits[0][pred_trg_token] = float('-inf')
+
+def history_one_mistake(gold_history: Tensor, predicted_history: Tensor) -> Tensor:
+    differences = gold_history != predicted_history
+    indices = differences.nonzero()
+    if not indices.numel():
+        return gold_history
+    rng = np.random.default_rng()
+    i = rng.choice(indices)[1]
+    new_history = gold_history.detach().clone()
+    new_history[0][i] = predicted_history[0][i]
+    return new_history
+
 def encode_sentence(sentence: List[str], model):
 
     indexes = [model.src_vocab.stoi[token] for token in sentence + [EOS_TOKEN]]

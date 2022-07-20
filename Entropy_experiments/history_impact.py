@@ -68,7 +68,7 @@ def mistake_stats(src_corpus: str, trg_corpus: str, pred_corpus: str, model: Mod
                             if gold_trg_token == None:
                                 break
 
-                            # forced decoding
+                            # gold history
                             pred_token_forced = predict_token(encoder_output,
                                 ys_gold, src_mask, trg_mask, model)
                             if pred_token_forced != gold_trg_token:
@@ -77,6 +77,7 @@ def mistake_stats(src_corpus: str, trg_corpus: str, pred_corpus: str, model: Mod
                                 df.loc["correct_predictions","gold history"] += 1
 
                             # greedy decoding
+                            # TODO: adapt this part based on what is done when greedy ends
                             pred_token_greedy = predict_token(encoder_output,
                                 ys, src_mask, trg_mask, model)
                             if pred_token_greedy != gold_trg_token:
@@ -109,6 +110,7 @@ def mistake_stats(src_corpus: str, trg_corpus: str, pred_corpus: str, model: Mod
                                     one_greedy_correct[i] += 1
 
                             # beam search decoding
+                            # TODO: adapt this part based on what is done when bs ends
                             if ys_bs != None:
                                 pred_token_bs = predict_token(encoder_output,
                                     ys_bs, src_mask, trg_mask, model)
@@ -132,6 +134,10 @@ def mistake_stats(src_corpus: str, trg_corpus: str, pred_corpus: str, model: Mod
                                 else:
                                     one_bs_incorrect[i] += 1
 
+                            # WIP: careful, this way all histories don't have
+                            # the same size and some cannot be used
+                            # TODO: decide how to handle one mistake max and
+                            # implement it
                             if ys[0][-1] != eos_index:
                                 ys = torch.cat([ys, IntTensor([[pred_token_greedy]])], dim=1)
                             ys_gold = torch.cat([ys_gold, IntTensor([[gold_trg_token]])], dim=1)
