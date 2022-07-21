@@ -305,17 +305,6 @@ def predict_wrong_token(gold_trg_token: int, encoder_output: Tensor,
             return pred_trg_token
         logits[0][pred_trg_token] = float('-inf')
 
-def history_one_mistake(gold_history: Tensor, predicted_history: Tensor) -> Tensor:
-    differences = gold_history != predicted_history
-    indices = differences.nonzero()
-    if not indices.numel():
-        return gold_history
-    rng = np.random.default_rng()
-    i = rng.choice(indices)[1]
-    new_history = gold_history.detach().clone()
-    new_history[0][i] = predicted_history[0][i]
-    return new_history
-
 def encode_sentence(sentence: List[str], model):
 
     indexes = [model.src_vocab.stoi[token] for token in sentence + [EOS_TOKEN]]
