@@ -92,6 +92,7 @@ if __name__ == "__main__":
     if args.output_path:
         with Halo(text=f"saving results", spinner="dots") as spinner:
             with open(args.output_path,'a') as f:
+                f.truncate(0)
                 for df in df_res, df_tokens:
                     df.to_csv(f)
                     f.write("\n")
