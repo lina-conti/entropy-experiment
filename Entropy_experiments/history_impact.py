@@ -22,7 +22,7 @@ def analyse_sentence(counters_dict, sentence_src, sentence_trg, sentence_pred, m
     greedy_finished = False
     bs_finished = False
 
-    for gold_token, token_bs in itertools.zip_longest(gold_target, pred_target):
+    for gold_token, original_token_bs in itertools.zip_longest(gold_target, pred_target):
         if gold_token == None:
             break
 
@@ -43,9 +43,9 @@ def analyse_sentence(counters_dict, sentence_src, sentence_trg, sentence_pred, m
 
         # beam search decoding
         if not bs_finished:
-            token_bs = predict_token(encoder_output, ys_bs, src_mask, trg_mask, model)
-        counters_dict["correct_bs"] += not bs_finished and token_bs == gold_token
-        counters_dict["incorrect_bs"] += bs_finished or token_bs != gold_token
+            predicted_token_bs = predict_token(encoder_output, ys_bs, src_mask, trg_mask, model)
+        counters_dict["correct_bs"] += not bs_finished and predicted_token_bs == gold_token
+        counters_dict["incorrect_bs"] += bs_finished or predicted_token_bs != gold_token
 
         # history with one mistake in the last token
         if ys_gold.size()[1] > 1:
@@ -65,26 +65,12 @@ def analyse_sentence(counters_dict, sentence_src, sentence_trg, sentence_pred, m
         greedy_finished = token_greedy == eos_index
         if not greedy_finished:
             ys = torch.cat([ys, IntTensor([[token_greedy]])], dim=1)
-        bs_finished = token_bs == eos_index
+        bs_finished = predicted_token_bs == eos_index
         if not bs_finished:
-            ys_bs = torch.cat([ys_bs, IntTensor([[token_bs]])], dim=1)
+            ys_bs = torch.cat([ys_bs, IntTensor([[original_token_bs]])], dim=1)
         wrong_token = predict_wrong_token(gold_token, encoder_output, ys, src_mask, trg_mask, model)
         ys_last = torch.cat([ys_gold, IntTensor([[wrong_token]])], dim=1)
         ys_wrong = torch.cat([ys_wrong, IntTensor([[wrong_token]])], dim=1)
-
-        print()
-        print(ys_bs)
-        print(ys_gold)
-        print(bs_finished)
-
-    counters_dict = {
-        "only_gold": 0, "only_predicted": 0,
-        "correct_gold": 0, "incorrect_gold": 0,
-        "correct_greedy": 0, "incorrect_greedy": 0,
-        "correct_bs": 0, "incorrect_bs": 0,
-        "correct_last": 0, "incorrect_last": 0,
-        "correct_1mistake": np.zeros(10), "incorrect_1mistake": np.zeros(10)
-    }
 
 def compute_results(counters_dict):
     data = {'gold history': [counters_dict['correct_gold'], counters_dict['incorrect_gold'], '-'],
@@ -94,13 +80,16 @@ def compute_results(counters_dict):
             'one mistake': [counters_dict['correct_1mistake'].mean(), counters_dict['incorrect_1mistake'].mean(),
             f"{round(counters_dict['correct_1mistake'].std(), 2)}"]}
 
+    print(f"\ncounters_dict['correct_1mistake']: {round(counters_dict['correct_1mistake'].std(), 2)}")
+    print(f"counters_dict['incorrect_1mistake']: {round(counters_dict['incorrect_1mistake'].std(), 2)}")
+
     df_counts = pd.DataFrame(data, index=['correct_predictions',
                                           'incorrect_predictions',
                                           'standard_deviation'])
 
     df_percentages = pd.concat([ \
-        df_counts.apply(lambda x: x.correct_predictions * 100 / (x.correct_predictions \
-         + x.incorrect_predictions), axis=0).rename("percentage correct"), \
+        df_counts.apply(lambda x: round(x.correct_predictions * 100 / (x.correct_predictions \
+         + x.incorrect_predictions), 2), axis=0).rename("percentage correct"), \
         pd.Series(["-", "-", "-", "-", "-"], name="standard deviation", \
         index = df_counts.columns)], axis=1)
 
@@ -109,8 +98,10 @@ def compute_results(counters_dict):
         percentages_1mist[i] = counters_dict['correct_1mistake'][i] * 100 \
             / (counters_dict['correct_1mistake'][i] + counters_dict['incorrect_1mistake'][i])
 
-    assert percentages_1mist.mean() == df_percentages.loc["one mistake", "percentage correct"]
-    df_percentages.loc["one mistake", "percentage correct"] = percentages_1mist.mean()
+    print(f"percentages_1mist.mean(): {round(percentages_1mist.mean(), 2)}")
+    print(f'df_percentages.loc["one mistake", "percentage correct"]: {df_percentages.loc["one mistake", "percentage correct"]}\n')
+
+    df_percentages.loc["one mistake", "percentage correct"] = round(percentages_1mist.mean(), 2)
     df_percentages.loc["one mistake", "standard deviation"] = round(percentages_1mist.std(), 2)
 
     return df_counts.T, df_percentages
@@ -145,9 +136,6 @@ def history_impact(src_corpus: str, trg_corpus: str, pred_corpus: str, model: Mo
 
 if __name__ == "__main__":
 
-    datetime_obj = datetime.datetime.now()
-    print(f"{datetime_obj.time()} - Started translating the corpus.")
-
     parser = argparse.ArgumentParser(description='Analyses the effect of changes \
     in the target history on the number of correctly predicted tokens.')
     parser.add_argument("source_corpus", help="path to the source corpus, tokenized with bpe")
@@ -156,6 +144,9 @@ if __name__ == "__main__":
     by the system using beam search, tokenized with bpe")
     parser.add_argument("-o", "--output_path", help="path to the csv file where results should be saved")
     args = parser.parse_args()
+
+    datetime_obj = datetime.datetime.now()
+    print(f"{datetime_obj.time()} - Started translating the corpus.")
 
     model = load_model("/home/lina/Desktop/Stage/transformer_wmt15_fr2en/transformer_wmt15_fr2en.yaml")
     max_output_length = load_config("/home/lina/Desktop/Stage/transformer_wmt15_fr2en/transformer_wmt15_fr2en.yaml")["training"]["max_output_length"]
