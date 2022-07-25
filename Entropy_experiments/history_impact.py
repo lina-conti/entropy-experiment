@@ -26,6 +26,8 @@ def analyse_sentence(counters_dict, sentence_src, sentence_trg, sentence_pred, m
         if gold_token == None:
             break
 
+        bs_finished = original_token_bs == None
+
         # gold history
         token_forced = predict_token(encoder_output, ys_gold, src_mask, trg_mask, model)
         counters_dict["correct_gold"] += token_forced == gold_token
@@ -65,7 +67,6 @@ def analyse_sentence(counters_dict, sentence_src, sentence_trg, sentence_pred, m
         greedy_finished = token_greedy == eos_index
         if not greedy_finished:
             ys = torch.cat([ys, IntTensor([[token_greedy]])], dim=1)
-        bs_finished = predicted_token_bs == eos_index
         if not bs_finished:
             ys_bs = torch.cat([ys_bs, IntTensor([[original_token_bs]])], dim=1)
         wrong_token = predict_wrong_token(gold_token, encoder_output, ys, src_mask, trg_mask, model)
