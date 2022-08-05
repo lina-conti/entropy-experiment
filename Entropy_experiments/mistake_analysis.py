@@ -6,11 +6,11 @@ def analyse_sentence_mistakes(stats, tokens_list, sentence_src, sentence_trg, mo
     encoder_output = encode_sentence(sentence_src.strip().split(), model)
     src_mask = torch.tensor([[[True for _ in range(encoder_output.shape[1])]]])
     gold_target = [model.trg_vocab.stoi[token] for token in sentence_trg.strip().split() + [EOS_TOKEN]]
-    ys_gold = encoder_output.new_full([1, 1], bos_index, dtype=torch.long)
+    ys = encoder_output.new_full([1, 1], bos_index, dtype=torch.long)
     trg_mask = src_mask.new_ones([1, 1, 1])
 
     for gold_trg_token in gold_target:
-        pred_trg_token, log_probs = predict_token(encoder_output, ys_gold, \
+        pred_trg_token, log_probs = predict_token(encoder_output, ys, \
             src_mask, trg_mask, model, return_log_probs=True)
 
         if pred_trg_token != gold_trg_token:
@@ -27,7 +27,10 @@ def analyse_sentence_mistakes(stats, tokens_list, sentence_src, sentence_trg, mo
             stats["prob_correct"] += log_probs[0][pred_trg_token].item()
             stats["entropy_correct"] += entropy(torch.exp(log_probs[0]).detach().cpu().numpy())
 
-        ys_gold = torch.cat([ys_gold, IntTensor([[gold_trg_token]])], dim=1)
+        if TEACHER_FORCING:
+            ys = torch.cat([ys, IntTensor([[gold_trg_token]])], dim=1)
+        else:
+            ys = torch.cat([ys, IntTensor([[pred_trg_token]])], dim=1)
 
 def mistake_stats(src_corpus: str, trg_corpus: str, model: Model):
 
@@ -72,17 +75,19 @@ def mistake_stats(src_corpus: str, trg_corpus: str, model: Model):
     return df_tokens, df_res
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='Analyses the mistakes commited \
+    using teacher forcing or not.')
+    parser.add_argument("source_corpus", help="path to the source corpus, tokenized with bpe")
+    parser.add_argument("target_corpus", help="path to the gold target corpus, tokenized with bpe")
+    parser.add_argument("-o", "--output_path", help="path to the csv file where results should be saved")
+    parser.add_argument("-t", "--teacher_forcing", help="whether to use a gold\
+    prefix (teacher forcing) or predicted prefix", action="store_true")
+    args = parser.parse_args()
 
     datetime_obj = datetime.datetime.now()
     print(f"{datetime_obj.time()} - Started translating the corpus.")
 
-    parser = argparse.ArgumentParser(description='Ananlyses the mistakes commited \
-    despite using forced decoding with gold target input.')
-    parser.add_argument("source_corpus", help="path to the source corpus, tokenized with bpe")
-    parser.add_argument("target_corpus", help="path to the gold target corpus, tokenized with bpe")
-    parser.add_argument("-o", "--output_path", help="path to the csv file where results should be saved")
-    args = parser.parse_args()
-
+    TEACHER_FORCING = args.teacher_forcing
     model = load_model("/home/lina/Desktop/Stage/transformer_wmt15_fr2en/transformer_wmt15_fr2en.yaml")
 
     df_tokens, df_res = mistake_stats(args.source_corpus, args.target_corpus, model)
@@ -93,6 +98,7 @@ if __name__ == "__main__":
         with Halo(text=f"saving results", spinner="dots") as spinner:
             with open(args.output_path,'a') as f:
                 f.truncate(0)
+                f.write(f"teacher forcing = {TEACHER_FORCING}\n")
                 for df in df_res, df_tokens:
                     df.to_csv(f)
                     f.write("\n")
