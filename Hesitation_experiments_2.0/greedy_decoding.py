@@ -13,6 +13,7 @@ from joeynmt.constants import EOS_TOKEN, BOS_TOKEN, UNK_TOKEN
 
 from halo import Halo
 import tqdm
+import numpy as np
 
 from pathlib import Path
 from joeynmt.tokenizers import build_tokenizer
@@ -99,9 +100,7 @@ def greedy_decoding(
 
 def encode_sentence(sentence: List[str], model):
 
-    indexes = [model.src_vocab.lookup(token) for token in sentence + [EOS_TOKEN]]
-    # list of lists because input to the NN has to be a list of sentences
-    print(model.src_vocab.array_to_sentence(indexes))
+    indexes = [model.bos_index] + [model.src_vocab.lookup(token) for token in sentence + [EOS_TOKEN]]
     src = torch.tensor([indexes])
     lengths = torch.tensor([len(indexes)])
     masks = torch.tensor([[[True for _ in range(len(indexes))]]])
@@ -125,10 +124,11 @@ if __name__ == "__main__":
     #s = "▁l ' athlète ▁a ▁terminé ▁son ▁travail ▁."
     #t = "▁the ▁athlete ▁finished ▁his ▁work ▁."
     s = "l'athlète a terminé son travail."
-    s_tokenized = tokenizer[cfg["data"]["src"]["lang"]](s)
+    src_tokenizer = tokenizer[cfg["data"]["src"]["lang"]]
+    s_tokenized = src_tokenizer(src_tokenizer.pre_process(s))
 
     src = encode_sentence(s_tokenized, model)
 
     res = greedy_decoding(model, src, max_output_length)
 
-    print(model.trg_vocab.array_to_sentence(res))
+    print(model.trg_vocab.array_to_sentence(np.array(res)))
