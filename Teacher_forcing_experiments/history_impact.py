@@ -36,10 +36,16 @@ def analyse_sentence(counters_dict, sentence_src, sentence_trg, sentence_pred, m
             token_greedy = predict_token(encoder_output, ys, src_mask, trg_mask, model)
         counters_dict["correct_greedy"] += not greedy_finished and token_greedy == gold_token
         counters_dict["incorrect_greedy"] += greedy_finished or token_greedy != gold_token
-        counters_dict["only_predicted"] += \
-            (token_forced != gold_token) and (not greedy_finished and token_greedy == gold_token)
-        counters_dict["only_gold"] += \
-            (token_forced == gold_token) and (greedy_finished or token_greedy != gold_token)
+
+        # greedy beam search decoding
+        if not bs_finished:
+            predicted_token_bs = predict_token(encoder_output, ys_bs, src_mask, trg_mask, model)
+        counters_dict["correct_greedy_bs"] += not bs_finished and predicted_token_bs == gold_token
+        counters_dict["incorrect_greedy_bs"] += bs_finished or predicted_token_bs != gold_token
+
+        # beam search decoding
+        counters_dict["correct_bs"] += not bs_finished and original_token_bs == gold_token
+        counters_dict["incorrect_bs"] += bs_finished or original_token_bs != gold_token
 
         # beam search decoding
         if not bs_finished:
@@ -74,13 +80,11 @@ def analyse_sentence(counters_dict, sentence_src, sentence_trg, sentence_pred, m
 def compute_results(counters_dict):
     data = {'gold history': [counters_dict['correct_gold'], counters_dict['incorrect_gold'], '-'],
             'greedy history': [counters_dict['correct_greedy'], counters_dict['incorrect_greedy'], '-'],
-            'beam search history': [counters_dict['correct_bs'], counters_dict['incorrect_bs'], '-'],
+            'beam search history': [counters_dict['correct_greedy_bs'], counters_dict['incorrect_greedy_bs'], '-'],
+            'beam search': [counters_dict['correct_bs'], counters_dict['incorrect_bs'], '-'],
             'last token mistake': [counters_dict['correct_last'], counters_dict['incorrect_last'], '-'],
             'one mistake': [counters_dict['correct_1mistake'].mean(), counters_dict['incorrect_1mistake'].mean(),
             f"{round(counters_dict['correct_1mistake'].std(), 2)}"]}
-
-    print(f"\ncounters_dict['correct_1mistake']: {round(counters_dict['correct_1mistake'].std(), 2)}")
-    print(f"counters_dict['incorrect_1mistake']: {round(counters_dict['incorrect_1mistake'].std(), 2)}")
 
     df_counts = pd.DataFrame(data, index=['correct_predictions',
                                           'incorrect_predictions',
@@ -89,16 +93,13 @@ def compute_results(counters_dict):
     df_percentages = pd.concat([ \
         df_counts.apply(lambda x: round(x.correct_predictions * 100 / (x.correct_predictions \
          + x.incorrect_predictions), 2), axis=0).rename("percentage correct"), \
-        pd.Series(["-", "-", "-", "-", "-"], name="standard deviation", \
+        pd.Series(["-", "-", "-", "-", "-", "-"], name="standard deviation", \
         index = df_counts.columns)], axis=1)
 
     percentages_1mist = np.zeros(10)
     for i in range(10):
         percentages_1mist[i] = counters_dict['correct_1mistake'][i] * 100 \
             / (counters_dict['correct_1mistake'][i] + counters_dict['incorrect_1mistake'][i])
-
-    print(f"percentages_1mist.mean(): {round(percentages_1mist.mean(), 2)}")
-    print(f'df_percentages.loc["one mistake", "percentage correct"]: {df_percentages.loc["one mistake", "percentage correct"]}\n')
 
     df_percentages.loc["one mistake", "percentage correct"] = round(percentages_1mist.mean(), 2)
     df_percentages.loc["one mistake", "standard deviation"] = round(percentages_1mist.std(), 2)
@@ -112,9 +113,9 @@ def history_impact(src_corpus: str, trg_corpus: str, pred_corpus: str, model: Mo
     eos_index = model.eos_index
 
     counters_dict = {
-        "only_gold": 0, "only_predicted": 0,
         "correct_gold": 0, "incorrect_gold": 0,
         "correct_greedy": 0, "incorrect_greedy": 0,
+        "correct_greedy_bs": 0, "incorrect_greedy_bs": 0,
         "correct_bs": 0, "incorrect_bs": 0,
         "correct_last": 0, "incorrect_last": 0,
         "correct_1mistake": np.zeros(10), "incorrect_1mistake": np.zeros(10)
@@ -138,7 +139,7 @@ def history_impact(src_corpus: str, trg_corpus: str, pred_corpus: str, model: Mo
                                         sentence_pred, model, bos_index, eos_index)
 
     df_counts, df_percentages = compute_results(counters_dict)
-    return df_counts, df_percentages, counters_dict["only_gold"], counters_dict["only_predicted"]
+    return df_counts, df_percentages
 
 if __name__ == "__main__":
 
@@ -158,15 +159,11 @@ if __name__ == "__main__":
     model = load_model(args.model_path)
     config = load_config(args.model_path)
 
-    df_counts, df_percentages, only_gold, only_predicted = history_impact(
+    df_counts, df_percentages = history_impact(
         args.source_corpus, args.target_corpus, args.predicted_corpus, model, config)
 
     print(df_counts.to_string(), "\n")
     print(df_percentages.to_string(), "\n")
-    print(f"Number of tokens that are correctly predicted with forced decoding but"
-          f" not with greedy decoding: {only_gold}.")
-    print(f"\nNumber of tokens that are correctly predicted with greedy decoding but"
-          f" not with forced decoding: {only_predicted}.\n")
 
     if args.output_path:
         with Halo(text=f"Saving results", spinner="dots") as spinner:
@@ -175,10 +172,6 @@ if __name__ == "__main__":
                 for df in df_counts, df_percentages:
                     df.to_csv(f)
                     f.write("\n")
-                f.write(f"Number of tokens that are correctly predicted with "
-                    f"forced decoding but not with greedy decoding, {only_gold}\n")
-                f.write(f"\nNumber of tokens that are correctly predicted with "
-                    f"greedy decoding but not with forced decoding, {only_predicted}")
         spinner.succeed(f"Results saved to {args.output_path}")
 
     datetime_obj = datetime.datetime.now()
