@@ -1,3 +1,5 @@
+# maybe this version is outdated and I should use the one in teacher forcing experiments instead?
+
 import sys
 sys.path.insert(0, '/home/lina/Desktop/Stage/Experiences/code')
 from utils import *
